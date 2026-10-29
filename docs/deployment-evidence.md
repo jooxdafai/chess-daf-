@@ -1,6 +1,16 @@
 # Chess DAF — deployment evidence, 2026-10-29
 
-## Current visual release: dark theme — 2026-10-29
+## Current visual release: viewport-fitting board — 2026-10-29
+- Runtime: 7298964f73eaefdfadebb649e847f4d4f8baeb3b at https://jooflow.space/chess-daf/. Evidence-only follow-up changes no runtime files.
+- Board size responds to available width **and height**, including notices and review navigation. Both clocks and playing controls remain visible. Compact desktop title/header, bounded side panels, scrollable setup options with pinned new-game action, and wrapping promotion choices. Mobile settings/history/training retain normal page scrolling.
+- Reproduced prior vertical clipping before implementation. `tests/layout.mjs` now passes on the actual public HTTPS app with native Stockfish: 1366x768, 2000x1050, 1440x900, 1280x720, 1024x600, 960x540 and 1920x650 in initial, notice and review states. Verified square board, clocks/controls/new-game/panels in viewport and no desktop vertical page scroll.
+- Mobile/tablet checks: 390x844, 360x640, 768x1024, 844x390 without horizontal overflow; portrait board/clocks/controls fit. Review navigation, sidebar scrolling, promotion choices and other tabs passed. Laptop/short-screen/mobile screenshots inspected.
+- Existing full browser gameplay/review/training/persistence suite passed locally on the scripted fixture. No JS page errors. These are Chrome checks, not universal browser or accessibility certification.
+- Deployment byte-compared backend/config/JS/requirements with the preceding live release: unchanged. Served CSS hash verified. Only chess-daf.service restarted; no database migration, nginx rewrite or Joo Flow restart. Anonymous browser spaces and passwordless access remain intact.
+- Rollback pointer: /var/backups/chess-daf/viewport-layout-20261029T175513Z/previous-release.txt. Repoint release and restart only Chess DAF; no database restore needed for this layout-only update.
+
+
+## Prior dark theme: colors retained, layout superseded above — 2026-10-29
 - Live: https://jooflow.space/chess-daf/ ; runtime revision 24f8950ea23072ecf4088b228e4bf02416ed003d. Later evidence-only commits change no runtime files.
 - Charcoal surfaces, softer green actions, readable Arabic text, distinct board/check/selection/status colors, native dark form controls and SVG progress-chart palette. Mobile browser theme-color matches the page.
 - Public Chrome computed-style checks passed: sampled text minimum contrast 4.98:1, board square contrast 2.07:1; no horizontal overflow at 360px/390px or JS errors. Desktop/mobile/training screenshots inspected. This is a scoped check, not a complete accessibility certification.
