@@ -1,10 +1,12 @@
 import os
+import chess
 from pathlib import Path
 
 from flask import Flask, abort, jsonify, request, send_from_directory
 from werkzeug.exceptions import HTTPException
 
 from .game import GameStore
+from .engine import Engine, EngineBusy, EngineUnavailable
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -17,6 +19,8 @@ def create_app(config=None):
     app.config.update(config or {})
     store = GameStore(app.config['DATABASE'])
     app.extensions['games'] = store
+    engine = app.config.get('ENGINE') or Engine()
+    app.extensions['engine'] = engine
 
     @app.before_request
     def guard():
@@ -53,6 +57,14 @@ def create_app(config=None):
     def not_found(error):
         return jsonify(error='المباراة مش موجودة'), 404
 
+    @app.errorhandler(EngineBusy)
+    def engine_busy(error):
+        return jsonify(error='المحرك مشغول بتحليل تاني؛ جرّب كمان لحظة'), 429
+
+    @app.errorhandler(EngineUnavailable)
+    def engine_unavailable(error):
+        return jsonify(error='محرك الشطرنج مش متاح حاليًا؛ الماتش محفوظ'), 503
+
     @app.get('/health')
     def health():
         return jsonify(status='ok', app='chess-daf')
@@ -67,9 +79,10 @@ def create_app(config=None):
 
     @app.post('/api/games')
     def create():
-        if request.json:
+        settings=request.json
+        if set(settings)-{'mode','color','level','seconds'} or settings.get('mode')=='local':
             abort(400)
-        return jsonify(store.create())
+        return jsonify(store.create(**{'mode':'training', **settings}))
 
     @app.get('/api/games/<uuid:game_id>')
     def game(game_id):
@@ -78,5 +91,27 @@ def create_app(config=None):
     @app.post('/api/games/<uuid:game_id>/move')
     def move(game_id):
         return jsonify(store.move(str(game_id), request.json.get('uci'), request.json.get('ply')))
+
+    @app.post('/api/games/<uuid:game_id>/bot')
+    def bot(game_id):
+        game=store.get(str(game_id))
+        if game['result']:
+            return jsonify(game)
+        if game['turn']==game['settings']['color'] or game['settings']['mode']=='local':
+            raise ValueError('مش دور المحرك')
+        uci=engine.play(store.board(game),game['settings']['level'])
+        return jsonify(store.move(str(game_id),uci,game['ply'],actor='bot'))
+
+    @app.post('/api/games/<uuid:game_id>/hint')
+    def hint(game_id):
+        game=store.get(str(game_id))
+        if game['settings']['mode']!='training' or game['result'] or game['turn']!=game['settings']['color']:
+            raise ValueError('التلميح متاح في دورك بوضع التدريب بس')
+        answer=engine.best(store.board(game))
+        return jsonify({**answer,'san':store.board(game).san(chess.Move.from_uci(answer['uci']))})
+
+    @app.post('/api/games/<uuid:game_id>/resign')
+    def resign(game_id):
+        return jsonify(store.resign(str(game_id)))
 
     return app
