@@ -1,5 +1,14 @@
 # Chess DAF — deployment evidence, 2026-10-29
 
+## Current release: one pending premove — 2026-10-29
+- Runtime `cae8f4120a6af32607a8a9820141180eb6cb104c` at https://jooflow.space/chess-daf/. This evidence-only follow-up changes no runtime files. The preceding viewport/dark layout remains in use.
+- One replaceable purple move can be selected during the opponent request, then executes exactly once if legal after the reply. Button/Escape/right-click cancellation, all promotion choices, terminal/error/sync cancellation, identity/ply/turn/legal-list checks. The server remains authoritative for clocks and rules; network latency counts.
+- Local Python **31 passed, 1 native-only skipped**; Node premove **3 passed**; syntax/diff checks passed. Complete existing play/review/training/persistence and viewport browser suites passed locally.
+- Dedicated deterministic Chrome suite passed: timed one-minute game, exactly-once execution, queue replacement, white/black play, all three cancellation paths, conditional capture, illegal/captured-source discard, failure then sync without replay, underpromotion and checkmate (including HTTP 200 review). Premove controls fit 960x540 and 390x844; screenshots inspected.
+- Actual public HTTPS/native Stockfish suite passed using fresh anonymous contexts: one-minute premove, exactly-once dispatch, flip, short/mobile viewport, cancellation paths, replacement, illegal discard, simulated HTTP503 then successful sync without stale replay, and black premove before the opening reply. Capture/underpromotion/mate seed scenarios are local-only and were skipped in this live run. These checks are Chrome-specific.
+- Backend, deployment files and requirements byte-matched the preceding release before activation. Only `chess-daf.service` restarted; no DB migration, nginx or Joo Flow changes. Served JS/module/CSS SHA-256 verified through loopback and public HTTPS; `.mjs` served as JavaScript.
+- Rollback pointer: `/var/backups/chess-daf/premove-20261029T181921Z/previous-release.txt`. Repoint release and restart only Chess DAF; no database restore needed. Local fixture stopped. Review: `docs/reviews/09-premove.md` (no confirmed vulnerabilities within scope).
+
 ## Current visual release: viewport-fitting board — 2026-10-29
 - Runtime: 7298964f73eaefdfadebb649e847f4d4f8baeb3b at https://jooflow.space/chess-daf/. Evidence-only follow-up changes no runtime files.
 - Board size responds to available width **and height**, including notices and review navigation. Both clocks and playing controls remain visible. Compact desktop title/header, bounded side panels, scrollable setup options with pinned new-game action, and wrapping promotion choices. Mobile settings/history/training retain normal page scrolling.

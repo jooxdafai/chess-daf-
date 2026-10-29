@@ -370,3 +370,15 @@ footer span:nth-child(2){display:none}
 .board-area .promotion { left: 6%; right: 6%; top: 24%; padding: 12px; }
 .board-area .promotion > div { flex-wrap: wrap; gap: 6px; margin-top: 10px; }
 .board-area .promotion button { flex: 1 1 calc(50% - 6px); padding: 9px 6px; font-size: 12px; }
+/* One queued move while the opponent thinks; execution is checked against server legality. */
+.square.premove-selected { background: #91a7c2; }
+.square.premove-source { background: #9a88b8; box-shadow: inset 0 0 0 3px #e1d1f4; }
+.square.premove-target { background: #b19dcc; box-shadow: inset 0 0 0 3px #e1d1f4; }
+.premove-bar { font-size: 11px; color: #ddc8f5; }
+#premove-label { direction: ltr; unicode-bidi: isolate; font: 12px Arial, sans-serif; }
+@media (min-width: 900px) {
+  .workspace > .board-area:has(#premove-bar:not([hidden])) { --board-reserve: 176px; }
+}
+@media (max-width: 899px) {
+  .workspace > .board-area:has(#premove-bar:not([hidden])) { --mobile-reserve: 392px; }
+}

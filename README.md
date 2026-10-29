@@ -18,6 +18,11 @@ Install distribution Stockfish (`apt-get install stockfish` on Ubuntu) or set `S
 ## Arabic review
 A completed game is analysed automatically in the UI, with retry and cached results. Every half-move gets a best alternative, legal continuation, Arabic lesson and centipawn loss from the mover's perspective. The score `/100` is our simple average `100*exp(-loss/300)`, not Chess.com's accuracy or an Elo rating. Quick searches may change their recommendation at greater depth. PGN can be exported without changing the game. No paid language model is required; explanations state verified chess facts with deterministic Arabic templates.
 
+## Premove
+While Stockfish is thinking, tap your piece and its destination to queue one move (purple). A new choice replaces it. Cancel with the visible button, Escape or right-click. Promotion offers all four pieces. Future destinations show piece geometry; the move executes only if it is legal after the opponent reply. Illegal moves, captured source pieces, finished games, connection errors, reload and manual sync discard the queue. The server remains authoritative for legality, turn, stale-ply protection and clocks; network time still counts, including in one-minute games. There is no multi-move queue or zero-time guarantee.
+
+Run `node --test tests/premove-unit.mjs`. For browser coverage, start `.venv/bin/python tests/premove_server.py /tmp/unique-premove.sqlite`, then use the same `CHESS_PLAYWRIGHT_MODULE` variable with `node tests/premove.mjs`. The loopback-only fixture adds scripted capture, promotion and checkmate positions inside its executable entry point; these routes are never registered by the production app. `CHESS_PREMOVE_LIVE=1 CHESS_TEST_URL=https://jooflow.space/chess-daf/` runs the common browser scenarios with native Stockfish, skipping fixture-specific positions.
+
 ## Personal training
 Three starter puzzles plus up to five exercises from your biggest inaccuracies per reviewed game. Your attempts, solved status and use of hints survive reload/restart. Personal exercises ask for the stored engine recommendation, not a claim that no alternative move is good. Progress shows recent 12 reviewed-game scores and weak concepts; it is not an official rating.
 

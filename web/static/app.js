@@ -1,5 +1,7 @@
+import {candidatePremoves,resolvePremove} from './premove.mjs';
 const $ = (selector) => document.querySelector(selector);
 let game = null, selected = null, flipped = false, busy = false, pendingPromotion = null;
+let premove = null, botPending = false, pendingPromotionPremove = false;
 let seconds = 0;
 let receivedAt = performance.now(), timeoutSync = false;
 let review = null, reviewCursor = -1, showBest = false, reviewBusy = false;
@@ -25,13 +27,17 @@ function drawBoard(fen) {
   const pieces=position(fen), board=$('#board'); board.replaceChildren();
   const files=[...'abcdefgh'], ranks=[8,7,6,5,4,3,2,1]; if(flipped){files.reverse();ranks.reverse();}
   const last=review&&reviewCursor>=0 ? review.moves[reviewCursor]?.[showBest?'best_uci':'uci']||'' : game?.moves.at(-1)?.uci || '';
+  const future=selected&&botPending?candidatePremoves(pieces,game.settings.color,selected):null;
   for(const rank of ranks) for(const file of files){
     const sq=file+rank, piece=pieces[sq], b=document.createElement('button'); b.type='button'; b.dataset.square=sq;
-    b.disabled=busy||!game||!!game.result||game.turn!==game.settings.color;
+    b.disabled=!canInteract();
     b.className=`square ${(file.charCodeAt(0)-97+rank)%2===0?'dark':''}`;
     b.setAttribute('aria-label',`${sq}${piece ? ` ${piece===piece.toUpperCase()?'أبيض':'أسود'} ${pieceNames[piece.toLowerCase()]}`:''}`);
     b.classList.toggle('selected',sq===selected); b.classList.toggle('last',last.slice(0,2)===sq||last.slice(2,4)===sq);
-    if(selected&&game?.legal_moves.some(m=>m.startsWith(selected+sq))){b.classList.add('legal');if(piece)b.classList.add('capture');}
+    b.classList.toggle('premove-selected',botPending&&sq===selected);
+    b.classList.toggle('premove-source',premove?.uci.slice(0,2)===sq);
+    b.classList.toggle('premove-target',premove?.uci.slice(2,4)===sq);
+    if(selected&&(future||game?.legal_moves||[]).some(m=>m.startsWith(selected+sq))){b.classList.add('legal');if(piece)b.classList.add('capture');}
     if(reviewCursor<0&&game?.check&&piece?.toLowerCase()==='k'&&(piece===piece.toUpperCase())===(game.turn==='white'))b.classList.add('in-check');
     if(piece){const img=document.createElement('img');img.src=`static/pieces/${piece===piece.toUpperCase()?'w':'b'}${piece.toLowerCase()}.svg`;img.alt='';img.draggable=false;b.append(img);}
     if(file===files[0]){const c=document.createElement('span');c.className='coord';c.textContent=rank;b.append(c);}
@@ -49,9 +55,12 @@ function render(){
   $('#opponent-status').textContent=game?.settings.mode==='match'?'ماتش من غير مساعدة':'وضع التدريب';
   controls(); clocks();
 }
-function accept(next){if(next.id!==game?.id){review=null;reviewCursor=-1;showBest=false;$('#review-nav').hidden=true;$('#coach-content').replaceChildren(...Array.from(initialCoach.childNodes).map(n=>n.cloneNode(true)));$('#promotion').hidden=true;pendingPromotion=null;}game=next;receivedAt=performance.now();timeoutSync=false;localStorage.setItem('chess-daf-game',game.id);render();}
+function accept(next){if(next.id!==game?.id){review=null;reviewCursor=-1;showBest=false;premove=null;selected=null;pendingPromotionPremove=false;$('#review-nav').hidden=true;$('#coach-content').replaceChildren(...Array.from(initialCoach.childNodes).map(n=>n.cloneNode(true)));$('#promotion').hidden=true;pendingPromotion=null;}if(next.result){premove=null;selected=null;pendingPromotion=null;pendingPromotionPremove=false;$('#promotion').hidden=true;}game=next;receivedAt=performance.now();timeoutSync=false;localStorage.setItem('chess-daf-game',game.id);render();}
+function canInteract(){return !!game&&!game.result&&(botPending||(!busy&&game.turn===game.settings.color));}
 function controls(){
-  document.querySelectorAll('#board .square').forEach(b=>b.disabled=busy||!game||!!game.result||game.turn!==game.settings.color);
+  document.querySelectorAll('#board .square').forEach(b=>b.disabled=!canInteract());
+  $('#premove-bar').hidden=!premove;
+  $('#premove-label').textContent=premove?`${premove.uci.slice(0,2)} → ${premove.uci.slice(2,4)}${premove.uci.slice(4).toUpperCase()}`:'';
   $('#hint').disabled=busy||!game||!!game.result||game.settings.mode!=='training'||game.turn!==game.settings.color;
   $('#resign').disabled=busy||!game||!!game.result;
   $('#new-game').disabled=busy||reviewBusy;
@@ -74,23 +83,50 @@ function clocks(){
   }
 }
 async function onSquare(square){
-  if(!game||busy||game.result||game.turn!==game.settings.color)return;
-  if(selected){const moves=game.legal_moves.filter(m=>m.startsWith(selected+square));if(moves.length){if(moves[0].length===5){pendingPromotion=moves;$('#promotion').hidden=false;return;}await play(moves[0]);return;}}
+  if(!canInteract())return;
+  if(botPending){
+    const pieces=position(game.fen),moves=selected?candidatePremoves(pieces,game.settings.color,selected).filter(m=>m.startsWith(selected+square)):[];
+    if(moves.length){if(moves[0].length===5){pendingPromotion=moves;pendingPromotionPremove=true;$('#promotion').hidden=false;}else submitPremove(moves[0]);return;}
+    premove=null;selected=pieces[square]&&(pieces[square]===pieces[square].toUpperCase())===(game.settings.color==='white')?square:null;drawBoard();controls();return;
+  }
+  if(selected){const moves=game.legal_moves.filter(m=>m.startsWith(selected+square));if(moves.length){if(moves[0].length===5){pendingPromotion=moves;pendingPromotionPremove=false;$('#promotion').hidden=false;return;}await play(moves[0]);return;}}
   selected=game.legal_moves.some(m=>m.startsWith(square))?square:null;drawBoard();
 }
+function cancelPremove(){premove=null;selected=null;pendingPromotion=null;pendingPromotionPremove=false;$('#promotion').hidden=true;drawBoard();controls();}
+function submitPremove(uci){
+  if(!game||game.result)return;
+  selected=null;
+  if(botPending&&game.turn!==game.settings.color){premove={gameId:game.id,ply:game.ply,uci};drawBoard();controls();}
+  else if(!busy&&game.turn===game.settings.color&&game.legal_moves.includes(uci))play(uci);
+  else notify('النقلة المسبقة اتلغت لأنها مش قانونية في الموقف الجديد.');
+}
 async function botTurn(){
-  if(game&&!game.result&&game.turn!==game.settings.color){$('#opponent-status').textContent='بيفكّر…';accept(await api(`games/${game.id}/bot`,{}));}
+  while(game&&!game.result&&game.turn!==game.settings.color){
+    botPending=true;controls();$('#opponent-status').textContent='بيفكّر… اختار نقلة مسبقة لو حابب';
+    try{
+      const next=await api(`games/${game.id}/bot`,{}),queued=premove;
+      botPending=false;premove=null;accept(next);
+      if(queued){
+        const uci=resolvePremove(queued,game);selected=null;
+        if(uci){accept(await api(`games/${game.id}/move`,{uci,ply:game.ply}));notify('النقلة المسبقة اتلعبت.');}
+        else if(!game.result)notify('النقلة المسبقة اتلغت لأنها مش قانونية في الموقف الجديد.');
+      }
+    }catch(error){cancelPremove();throw error;}finally{botPending=false;controls();}
+  }
 }
 async function play(uci){setBusy(true);try{selected=null;accept(await api(`games/${game.id}/move`,{uci,ply:game.ply}));notify('');await botTurn();}catch(e){notify(`${e.message} · اضغط تحديث للمحاولة تاني`,true);}finally{setBusy(false);}}
-async function newGame(){setBusy(true);try{selected=null;flipped=$('#color').value==='black';accept(await api('games',{mode:$('#mode').value,color:$('#color').value,level:Number($('#level').value),seconds}));notify('بدأنا! اضغط على القطعة، وبعدين على مربع الوصول.');await botTurn();}catch(e){notify(e.message,true);}finally{setBusy(false);}}
-async function sync(){if(busy||!game)return;setBusy(true);try{accept(await api(`games/${game.id}`));await botTurn();notify('');}catch(e){notify(e.message,true);}finally{setBusy(false);}}
+async function newGame(){cancelPremove();setBusy(true);try{selected=null;flipped=$('#color').value==='black';accept(await api('games',{mode:$('#mode').value,color:$('#color').value,level:Number($('#level').value),seconds}));notify('بدأنا! اضغط على القطعة، وبعدين على مربع الوصول.');await botTurn();}catch(e){notify(e.message,true);}finally{setBusy(false);}}
+async function sync(){if(busy||!game)return;cancelPremove();setBusy(true);try{accept(await api(`games/${game.id}`));notify('');await botTurn();}catch(e){notify(e.message,true);}finally{setBusy(false);}}
 $('#new-game').addEventListener('click',()=>{if(game&&!game.result)$('#confirm-dialog').showModal();else newGame();});
 $('#confirm-new').addEventListener('click',()=>{$('#confirm-dialog').close();newGame();});$('#cancel-new').addEventListener('click',()=>$('#confirm-dialog').close());
 $('#flip').addEventListener('click',()=>{flipped=!flipped;drawBoard();});
 $('#sync').addEventListener('click',sync);
 $('#hint').addEventListener('click',async()=>{setBusy(true);try{const hint=await api(`games/${game.id}/hint`,{});selected=hint.uci.slice(0,2);drawBoard();const box=$('#coach-content');box.replaceChildren();const note=node('div','','coach-note');note.append(node('h3',`جرّب ${hint.san}`),node('p',hint.explanation));box.append(note);notify(`من ${hint.uci.slice(0,2)} إلى ${hint.uci.slice(2,4)} · تحليل سريع تقديري.`);}catch(e){notify(e.message,true);}finally{setBusy(false);}});
 $('#resign').addEventListener('click',async()=>{if(!confirm('تنهي الماتش بالاستسلام؟'))return;setBusy(true);try{accept(await api(`games/${game.id}/resign`,{}));notify('الماتش اتحفظ. نراجع ونتعلّم منه.');}catch(e){notify(e.message,true);}finally{setBusy(false);}});
-document.querySelectorAll('[data-promote]').forEach(b=>b.addEventListener('click',()=>{const move=pendingPromotion?.find(m=>m.endsWith(b.dataset.promote));$('#promotion').hidden=true;pendingPromotion=null;if(move)play(move);}));
+document.querySelectorAll('[data-promote]').forEach(b=>b.addEventListener('click',()=>{const move=pendingPromotion?.find(m=>m.endsWith(b.dataset.promote)),future=pendingPromotionPremove;$('#promotion').hidden=true;pendingPromotion=null;pendingPromotionPremove=false;if(move){if(future)submitPremove(move);else play(move);}}));
+$('#cancel-premove').addEventListener('click',cancelPremove);
+$('#board').addEventListener('contextmenu',e=>{e.preventDefault();cancelPremove();});
+document.addEventListener('keydown',e=>{if(e.key==='Escape')cancelPremove();});
 document.querySelectorAll('[data-time]').forEach(b=>b.addEventListener('click',()=>{seconds=Number(b.dataset.time);document.querySelectorAll('[data-time]').forEach(n=>n.classList.toggle('selected',n===b));}));
 function switchTab(tab){document.querySelectorAll('.nav').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));for(const key of ['play','history','practice'])$(`#${key}-view`).hidden=key!==tab;}
 document.querySelectorAll('[data-tab]').forEach(b=>b.addEventListener('click',async()=>{switchTab(b.dataset.tab);if(b.dataset.tab==='history')await history();if(b.dataset.tab==='practice')await practice();}));
