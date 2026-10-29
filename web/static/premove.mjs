@@ -1,3 +1,5 @@
+import {projectMove} from './board-view.mjs';
+export const MAX_PREMOVES=8;
 // Potential destinations only. The server's new legal_moves list decides execution.
 export function candidatePremoves(pieces,color,from){
   const piece=pieces[from];
@@ -27,4 +29,16 @@ export function candidatePremoves(pieces,color,from){
 export function resolvePremove(queued,game){
   return queued&&game&&queued.gameId===game.id&&!game.result&&game.ply===queued.ply+1
     &&game.turn===game.settings.color&&game.legal_moves.includes(queued.uci)?queued.uci:null;
+}
+
+export function projectQueue(pieces,queue){
+  return queue.reduce((view,item)=>projectMove(view,item.uci),{...pieces});
+}
+
+export function appendPremove(queue,game,pieces,uci){
+  if(!game||game.result||game.turn===game.settings.color||queue.length>=MAX_PREMOVES)return null;
+  if(queue.some((item,i)=>item.gameId!==game.id||item.ply!==game.ply+i*2))return null;
+  const view=projectQueue(pieces,queue),from=uci.slice(0,2);
+  if(!candidatePremoves(view,game.settings.color,from).includes(uci))return null;
+  return [...queue,{gameId:game.id,ply:game.ply+queue.length*2,uci}];
 }
