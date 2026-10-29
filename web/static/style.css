@@ -87,7 +87,7 @@ p{line-height:1.9}
 .board.dragging, .board.dragging .square { cursor: grabbing; }
 .square.drag-source img { opacity: 0; }
 .square.drag-target { box-shadow: inset 0 0 0 4px #e9edb1; }
-.drag-piece { position: fixed; z-index: 1000; pointer-events: none; object-fit: contain; filter: drop-shadow(0 7px 5px #0008); }
+.drag-piece { position: fixed; left: 0; top: 0; will-change: transform; z-index: 1000; pointer-events: none; object-fit: contain; filter: drop-shadow(0 7px 5px #0008); }
 .square.selected{background:#d1d98c}
 .square.last{background:#c3ce91}
 .square.dark.last{background:#9cab66}
@@ -287,11 +287,11 @@ footer span:nth-child(2){display:none}
     gap: 18px; align-items: stretch;
   }
   .workspace > .board-area {
-    --board-reserve: 142px;
+    --board-reserve: 176px;
     --board-size: min(100cqw, calc(100cqh - var(--board-reserve)));
     height: 100%; min-height: 0; container-type: size;
     display: grid; grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: 40px minmax(0, 1fr) 40px auto 30px;
+    grid-template-rows: 40px minmax(0, 1fr) 40px 34px 30px;
     gap: 8px; justify-items: center;
   }
   .workspace > .board-area:has(#review-nav:not([hidden])) { --board-reserve: 176px; }
@@ -354,7 +354,7 @@ footer span:nth-child(2){display:none}
   #notice { padding: 8px 12px; line-height: 1.5; max-height: 60px; overflow: auto; margin-bottom: 12px; }
   .workspace { display: flex; flex-direction: column; gap: 20px; }
   .workspace > .board-area {
-    --mobile-reserve: 350px;
+    --mobile-reserve: 392px;
     order: 0; width: 100%; display: grid; gap: 8px; justify-items: center;
   }
   .workspace > .board-area:has(#review-nav:not([hidden])) { --mobile-reserve: 392px; }
@@ -386,4 +386,14 @@ footer span:nth-child(2){display:none}
 }
 @media (max-width: 899px) {
   .workspace > .board-area:has(#premove-bar:not([hidden])) { --mobile-reserve: 392px; }
+}
+
+#board .square img { position: relative; }
+@media (max-width: 899px) {
+ .workspace > .board-area { grid-template-rows: 40px auto 40px 34px 30px; }
+ .board-area > .player:first-child { grid-row: 1; }
+ .board-area > .board-wrap { grid-row: 2; }
+ .board-area > .player:nth-child(3) { grid-row: 3; }
+ .board-area > .review-nav { grid-row: 4; }
+ .board-area > .board-controls { grid-row: 5; }
 }
