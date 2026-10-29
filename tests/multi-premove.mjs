@@ -11,9 +11,9 @@ async function state(page){return page.evaluate(async()=>(await(await fetch('api
 async function ready(page){await page.waitForFunction(()=>!document.querySelector('#hint').disabled);}
 try{
  if(process.env.CHESS_MULTI_LIVE){
-   const {page,close}=await fresh(),gate=await botGate(page);await start(page);await gate.waiting;
+   const {page,close}=await fresh(),gate=await botGate(page);await page.locator('[data-time="60"]').click();await start(page);await gate.waiting;
    await choose(page,'a2','a3');await choose(page,'h2','h3');assert.equal(await page.locator('#premove-bar').getAttribute('data-count'),'2');
-   gate.release();await ready(page);const game=await state(page);assert.equal(game.moves[2].uci,'a2a3');assert.equal(game.moves[4].uci,'h2h3');assert.ok(await page.locator('#notice').isHidden());await close();
+   gate.release();await ready(page);const game=await state(page);assert.equal(game.settings.seconds,60);assert.equal(game.moves[2].uci,'a2a3');assert.equal(game.moves[4].uci,'h2h3');assert.ok(await page.locator('#notice').isHidden());await close();
    console.log('PASS: two queued quiet moves on public/native engine.');
  }else{
  const page=await browser.newPage();await page.goto(base);
