@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 const { chromium } = await import(process.env.CHESS_PLAYWRIGHT_MODULE || '@playwright/test');
 const browser=await chromium.launch({channel:'chrome',headless:true});
-const context=await browser.newContext({viewport:{width:1440,height:1100},extraHTTPHeaders:{'X-Chess-User':'owner'}});
+const context=await browser.newContext({viewport:{width:1440,height:1100},extraHTTPHeaders:process.env.CHESS_PUBLIC_TEST ? {} : {'X-Chess-User':'owner'}});
 const page=await context.newPage();
 const errors=[];
 page.on('pageerror',e=>errors.push(e.message));

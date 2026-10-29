@@ -14,7 +14,7 @@ async function api(path, body) {
   const response = await fetch(`api/${path}`, {method: body === undefined ? 'GET':'POST', headers: body === undefined ? {} : {'Content-Type':'application/json'}, body: body === undefined ? undefined : JSON.stringify(body)});
   if (response.redirected) { location.href = response.url; throw new Error('سجّل دخولك على Joo Flow علشان تكمّل'); }
   const data = await response.json();
-  if (!response.ok) throw new Error(data.error || 'الاتصال اتقطع؛ حاول تاني');
+  if (!response.ok) {const error=new Error(data.error || 'الاتصال اتقطع؛ حاول تاني');error.status=response.status;throw error;}
   return data;
 }
 function position(fen) {
@@ -165,4 +165,4 @@ async function tryPuzzle(square){
 document.addEventListener('keydown',e=>{if(review&&reviewCursor>=0&&!['INPUT','SELECT','TEXTAREA'].includes(document.activeElement.tagName)){if(e.key==='ArrowLeft'){e.preventDefault();selectReview(reviewCursor+1);}if(e.key==='ArrowRight'){e.preventDefault();selectReview(reviewCursor-1);}}});
 setInterval(clocks,200);
 const saved=localStorage.getItem('chess-daf-game');
-if(saved){try{accept(await api(`games/${encodeURIComponent(saved)}`));flipped=game.settings.color==='black';await sync();}catch(e){notify(e.message,true);}}
+if(saved){try{accept(await api(`games/${encodeURIComponent(saved)}`));flipped=game.settings.color==='black';await sync();}catch(e){if(e.status===404){localStorage.removeItem('chess-daf-game');notify('بدأنا مساحة للمتصفح ده. اختار إعداداتك وابدأ ماتش.');}else notify(e.message,true);}}

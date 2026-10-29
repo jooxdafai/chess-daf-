@@ -1,0 +1,32 @@
+import assert from 'node:assert/strict';
+const {chromium}=await import(process.env.CHESS_PLAYWRIGHT_MODULE||'@playwright/test');
+const browser=await chromium.launch({channel:'chrome',headless:true});
+const a=await browser.newContext(),b=await browser.newContext();
+const page=await a.newPage(),other=await b.newPage();
+const base=process.env.CHESS_TEST_URL||'http://127.0.0.1:18972/';
+try{
+  assert.equal((await page.goto(base)).status(),200);
+  assert.equal(page.url(),base,'public page must not redirect to a login or door');
+  await page.getByRole('button',{name:'ابدأ ماتش'}).click();
+  await page.locator('#board [data-square="e2"]').click();
+  await page.locator('#board [data-square="e4"]').click();
+  await page.waitForFunction(()=>document.querySelector('.move-row')&&!document.querySelector('.move-row').textContent.includes('—'));
+  const games=await page.evaluate(async()=>await(await fetch('api/games')).json());
+  assert.equal(games.length,1);
+  await other.goto(base);
+  assert.deepEqual(await other.evaluate(async()=>await(await fetch('api/games')).json()),[]);
+  assert.equal(await other.evaluate(async id=>(await fetch(`api/games/${id}`)).status,games[0].id),404);
+  await page.reload();
+  await page.waitForFunction(()=>document.querySelector('.move-row')?.textContent.includes('e4'));
+  await page.getByRole('button',{name:'تدرّب',exact:true}).click();
+  await page.locator('[data-puzzle="starter-capture"]').click();
+  await page.locator('#practice-board [data-square="d2"]').click();
+  await page.locator('#practice-board [data-square="e3"]').click();
+  await page.waitForFunction(()=>document.querySelector('#solved-count')?.textContent==='1');
+  assert.equal(await other.evaluate(async()=>await(await fetch('api/progress')).json()).then(s=>s.solved),0);
+  await page.evaluate(()=>localStorage.setItem('chess-daf-game','00000000-0000-0000-0000-000000000000'));
+  await page.reload();
+  await page.waitForFunction(()=>!localStorage.getItem('chess-daf-game'));
+  assert.equal(await page.locator('#notice').getAttribute('class'),'notice');
+  console.log('PASS: no password or identity header, isolated browsers, no cross-browser game access, reload recovery, independent exercises, stale-session recovery.');
+}finally{await browser.close();}
