@@ -110,7 +110,7 @@ async function botTurn(){
       botPending=false;premove=null;accept(next);
       if(queued){
         const uci=resolvePremove(queued,game);selected=null;
-        if(uci){accept(await api(`games/${game.id}/move`,{uci,ply:game.ply}));notify('النقلة المسبقة اتلعبت.');}
+        if(uci){accept(await api(`games/${game.id}/move`,{uci,ply:game.ply}));notify('');}
         else if(!game.result)notify('النقلة المسبقة اتلغت لأنها مش قانونية في الموقف الجديد.');
       }
     }catch(error){cancelPremove();throw error;}finally{botPending=false;controls();}
