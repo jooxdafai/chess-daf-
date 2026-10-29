@@ -1,6 +1,15 @@
 # Chess DAF — deployment evidence, 2026-10-29
 
-## Current: standalone, no password — 2026-10-29
+## Current visual release: dark theme — 2026-10-29
+- Live: https://jooflow.space/chess-daf/ ; runtime revision 24f8950ea23072ecf4088b228e4bf02416ed003d. Later evidence-only commits change no runtime files.
+- Charcoal surfaces, softer green actions, readable Arabic text, distinct board/check/selection/status colors, native dark form controls and SVG progress-chart palette. Mobile browser theme-color matches the page.
+- Public Chrome computed-style checks passed: sampled text minimum contrast 4.98:1, board square contrast 2.07:1; no horizontal overflow at 360px/390px or JS errors. Desktop/mobile/training screenshots inspected. This is a scoped check, not a complete accessibility certification.
+- Full play/bot/reload/hint/resign/review/alternative/exercise/persistence browser flow passed against an isolated scripted fixture. No Python/native-engine rerun was required for the static-only change. Backend, engine, session, storage and deployment files were byte-compared against the prior live release before activation and were identical.
+- Served stylesheet hash verified against the reviewed release after restarting only chess-daf.service. No database migration, configuration rewrite or nginx/Joo Flow restart. The app remains standalone and passwordless.
+- Rollback pointer: /var/backups/chess-daf/dark-theme-20261029T173533Z/previous-release.txt. Returning the release symlink and restarting only this app is sufficient for this CSS-only update; no database rollback.
+
+
+## Passwordless release: access model unchanged, visual source superseded above — 2026-10-29
 - https://jooflow.space/chess-daf/ opens directly, HTTP 200, without a Joo Flow login or doors.
 - Runtime revision: 553471ef741f9bd63780a71242ec3bf9cfafe94f. Evidence-only follow-ups do not change runtime files.
 - Guest workspaces use app-scoped random browser cookies, owner-filtered games/reviews/exports, isolated exercises and progress. Old owner data is retained; before migration there were 0 games and 3 starter exercises, preserved exactly.
