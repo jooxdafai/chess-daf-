@@ -1,9 +1,9 @@
-import {candidatePremoves,resolvePremove} from './premove.mjs';
+import {candidatePremoves,resolvePremove,appendPremove,projectQueue,MAX_PREMOVES} from './premove.mjs';
 import {attachBoardDrag} from './drag.mjs';
 import {createBoardView,projectMove} from './board-view.mjs';
 const $ = (selector) => document.querySelector(selector);
 let game = null, selected = null, flipped = false, busy = false, pendingPromotion = null;
-let premove = null, botPending = false, pendingPromotionPremove = false;
+let premoves = [], botPending = false, pendingPromotionPremove = false;
 let boardDrag = null, pendingVisual = null, dragDrop = false, pendingPromotionAnimate = true;
 const boardView=createBoardView($('#board'),sq=>onSquare(sq));
 let seconds = 0;
@@ -28,7 +28,7 @@ function position(fen) {
 }
 function drawBoard(fen,animate=true) {
   fen=fen || (review&&reviewCursor>=0 ? review.moves[reviewCursor]?.[showBest?'best_fen':'fen_before']:null) || game?.fen || startFen;
-  const pieces=pendingVisual?.pieces||position(fen);
+  const pieces=projectQueue(pendingVisual?.pieces||position(fen),premoves);
   const squares=boardView.render(pieces,{flipped,animate,move:pendingVisual?.uci||game?.moves.at(-1)?.uci||''});
   const files=[...'abcdefgh'], ranks=[8,7,6,5,4,3,2,1]; if(flipped){files.reverse();ranks.reverse();}
   const last=review&&reviewCursor>=0 ? review.moves[reviewCursor]?.[showBest?'best_uci':'uci']||'' : game?.moves.at(-1)?.uci || '';
@@ -40,8 +40,10 @@ function drawBoard(fen,animate=true) {
     b.setAttribute('aria-label',`${sq}${piece ? ` ${piece===piece.toUpperCase()?'أبيض':'أسود'} ${pieceNames[piece.toLowerCase()]}`:''}`);
     b.classList.toggle('selected',sq===selected); b.classList.toggle('last',last.slice(0,2)===sq||last.slice(2,4)===sq);
     b.classList.toggle('premove-selected',botPending&&sq===selected);
-    b.classList.toggle('premove-source',premove?.uci.slice(0,2)===sq);
-    b.classList.toggle('premove-target',premove?.uci.slice(2,4)===sq);
+    b.classList.toggle('premove-source',premoves.some(p=>p.uci.slice(0,2)===sq));
+    b.classList.toggle('premove-target',premoves.some(p=>p.uci.slice(2,4)===sq));
+    const numbers=premoves.flatMap((p,i)=>p.uci.slice(2,4)===sq?[i+1]:[]);let badge=b.querySelector('.queue-order');
+    if(numbers.length){if(!badge){badge=document.createElement('span');badge.className='queue-order';b.append(badge);}badge.textContent=numbers.join('·');}else badge?.remove();
     if(selected&&(future||game?.legal_moves||[]).some(m=>m.startsWith(selected+sq))){b.classList.add('legal');if(piece)b.classList.add('capture');}
     if(reviewCursor<0&&game?.check&&piece?.toLowerCase()==='k'&&(piece===piece.toUpperCase())===(game.turn==='white'))b.classList.add('in-check');
 
@@ -57,12 +59,15 @@ function render(){
   $('#opponent-status').textContent=game?.settings.mode==='match'?'ماتش من غير مساعدة':'وضع التدريب';
   controls(); clocks();
 }
-function accept(next){boardDrag?.cancel();pendingVisual=null;if(next.id!==game?.id){review=null;reviewCursor=-1;showBest=false;premove=null;selected=null;pendingPromotionPremove=false;$('#review-nav').hidden=true;$('#coach-content').replaceChildren(...Array.from(initialCoach.childNodes).map(n=>n.cloneNode(true)));$('#promotion').hidden=true;pendingPromotion=null;}if(next.result){premove=null;selected=null;pendingPromotion=null;pendingPromotionPremove=false;$('#promotion').hidden=true;}game=next;receivedAt=performance.now();timeoutSync=false;localStorage.setItem('chess-daf-game',game.id);render();}
+function accept(next){boardDrag?.cancel();pendingVisual=null;if(next.id!==game?.id){review=null;reviewCursor=-1;showBest=false;premoves=[];selected=null;pendingPromotionPremove=false;$('#review-nav').hidden=true;$('#coach-content').replaceChildren(...Array.from(initialCoach.childNodes).map(n=>n.cloneNode(true)));$('#promotion').hidden=true;pendingPromotion=null;}if(next.result){premoves=[];selected=null;pendingPromotion=null;pendingPromotionPremove=false;$('#promotion').hidden=true;}game=next;receivedAt=performance.now();timeoutSync=false;localStorage.setItem('chess-daf-game',game.id);render();}
 function canInteract(){return !!game&&!game.result&&(botPending||(!busy&&game.turn===game.settings.color));}
 function controls(){
   document.querySelectorAll('#board .square').forEach(b=>b.disabled=!canInteract());
-  $('#premove-bar').hidden=!premove;
-  $('#premove-label').textContent=premove?`${premove.uci.slice(0,2)} → ${premove.uci.slice(2,4)}${premove.uci.slice(4).toUpperCase()}`:'';
+  $('#premove-bar').hidden=!premoves.length;
+  $('#premove-bar').dataset.count=premoves.length;
+  const label=premoves.map((p,i)=>`${i+1}. ${p.uci.slice(0,2)}→${p.uci.slice(2,4)}${p.uci.slice(4).toUpperCase()}`).join(' · ');
+  if($('#premove-label').textContent!==label)$('#premove-label').textContent=label;
+  $('#premove-label').setAttribute('aria-label',`${premoves.length} / ${MAX_PREMOVES} · ${label}`);
   $('#hint').disabled=busy||!game||!!game.result||game.settings.mode!=='training'||game.turn!==game.settings.color;
   $('#resign').disabled=busy||!game||!!game.result;
   $('#new-game').disabled=busy||reviewBusy;
@@ -87,18 +92,22 @@ function clocks(){
 async function onSquare(square){
   if(!canInteract())return;
   if(botPending){
-    const pieces=position(game.fen),moves=selected?candidatePremoves(pieces,game.settings.color,selected).filter(m=>m.startsWith(selected+square)):[];
+    const pieces=projectQueue(position(game.fen),premoves),moves=selected?candidatePremoves(pieces,game.settings.color,selected).filter(m=>m.startsWith(selected+square)):[];
     if(moves.length){if(moves[0].length===5){pendingPromotion=moves;pendingPromotionPremove=true;$('#promotion').hidden=false;}else submitPremove(moves[0]);return;}
-    premove=null;selected=pieces[square]&&(pieces[square]===pieces[square].toUpperCase())===(game.settings.color==='white')?square:null;drawBoard();controls();return;
+    selected=pieces[square]&&(pieces[square]===pieces[square].toUpperCase())===(game.settings.color==='white')?square:null;drawBoard();controls();return;
   }
   if(selected){const moves=game.legal_moves.filter(m=>m.startsWith(selected+square));if(moves.length){if(moves[0].length===5){pendingPromotion=moves;pendingPromotionPremove=false;pendingPromotionAnimate=!dragDrop;$('#promotion').hidden=false;return;}await play(moves[0],!dragDrop);return;}}
   selected=game.legal_moves.some(m=>m.startsWith(square))?square:null;drawBoard();
 }
-function cancelPremove(){boardDrag?.cancel();premove=null;selected=null;pendingPromotion=null;pendingPromotionPremove=false;$('#promotion').hidden=true;drawBoard();controls();}
+function cancelPremove(){boardDrag?.cancel();premoves=[];selected=null;pendingPromotion=null;pendingPromotionPremove=false;$('#promotion').hidden=true;drawBoard();controls();}
 function submitPremove(uci){
   if(!game||game.result)return;
   selected=null;
-  if(botPending&&game.turn!==game.settings.color){premove={gameId:game.id,ply:game.ply,uci};drawBoard();controls();}
+  if(botPending&&game.turn!==game.settings.color){
+    const next=appendPremove(premoves,game,position(game.fen),uci);
+    if(next){premoves=next;drawBoard(undefined,!dragDrop);controls();}
+    else notify(premoves.length>=MAX_PREMOVES?'وصلت لـ 8 نقلات مسبقة. الغي آخر نقلة لو حابب تغيّرها.':'النقلة المسبقة اتلغت لأنها مش قانونية في الموقف الجديد.');
+  }
   else if(!busy&&game.turn===game.settings.color&&game.legal_moves.includes(uci))play(uci);
   else notify('النقلة المسبقة اتلغت لأنها مش قانونية في الموقف الجديد.');
 }
@@ -106,12 +115,13 @@ async function botTurn(){
   while(game&&!game.result&&game.turn!==game.settings.color){
     botPending=true;controls();$('#opponent-status').textContent='بيفكّر… اختار نقلة مسبقة لو حابب';
     try{
-      const next=await api(`games/${game.id}/bot`,{}),queued=premove;
-      botPending=false;premove=null;accept(next);
+      const next=await api(`games/${game.id}/bot`,{});
+      botPending=false;accept(next);
+      const queued=premoves[0];
       if(queued){
         const uci=resolvePremove(queued,game);selected=null;
-        if(uci)await submitMove(uci);
-        else if(!game.result)notify('النقلة المسبقة اتلغت لأنها مش قانونية في الموقف الجديد.');
+        if(uci){premoves=premoves.slice(1);await submitMove(uci);}
+        else {cancelPremove();if(!game.result)notify('النقلة المسبقة اتلغت لأنها مش قانونية في الموقف الجديد.');}
       }
     }catch(error){cancelPremove();throw error;}finally{botPending=false;controls();}
   }
@@ -132,6 +142,7 @@ $('#hint').addEventListener('click',async()=>{setBusy(true);try{const hint=await
 $('#resign').addEventListener('click',async()=>{if(!confirm('تنهي الماتش بالاستسلام؟'))return;setBusy(true);try{accept(await api(`games/${game.id}/resign`,{}));notify('الماتش اتحفظ. نراجع ونتعلّم منه.');}catch(e){notify(e.message,true);}finally{setBusy(false);}});
 document.querySelectorAll('[data-promote]').forEach(b=>b.addEventListener('click',()=>{const move=pendingPromotion?.find(m=>m.endsWith(b.dataset.promote)),future=pendingPromotionPremove;$('#promotion').hidden=true;pendingPromotion=null;pendingPromotionPremove=false;if(move){if(future)submitPremove(move);else play(move,pendingPromotionAnimate);}}));
 $('#cancel-premove').addEventListener('click',cancelPremove);
+$('#undo-premove').addEventListener('click',()=>{boardDrag?.cancel();premoves=premoves.slice(0,-1);selected=null;pendingPromotion=null;$('#promotion').hidden=true;drawBoard();controls();});
 $('#board').addEventListener('contextmenu',e=>{e.preventDefault();cancelPremove();});
 document.addEventListener('keydown',e=>{if(e.key==='Escape')cancelPremove();});
 document.querySelectorAll('[data-time]').forEach(b=>b.addEventListener('click',()=>{seconds=Number(b.dataset.time);document.querySelectorAll('[data-time]').forEach(n=>n.classList.toggle('selected',n===b));}));
@@ -141,12 +152,12 @@ async function history(){try{const games=await api('games');const list=$('#histo
 boardDrag=attachBoardDrag($('#board'),{
   canStart:from=>{
     if(!canInteract()||!$('#promotion').hidden)return false;
-    const piece=position(game.fen)[from];
+    const piece=projectQueue(position(game.fen),premoves)[from];
     return !!piece&&(piece===piece.toUpperCase())===(game.settings.color==='white');
   },
-  canDrop:(from,to)=>canInteract()&&(botPending?candidatePremoves(position(game.fen),game.settings.color,from):game.legal_moves).some(m=>m.startsWith(from+to)),
+  canDrop:(from,to)=>canInteract()&&(botPending?candidatePremoves(projectQueue(position(game.fen),premoves),game.settings.color,from):game.legal_moves).some(m=>m.startsWith(from+to)),
   positionKey:()=>`${game?.id}:${game?.ply}:${flipped}`,
-  onStart:from=>{selected=from;premove=null;drawBoard();controls();},
+  onStart:from=>{selected=from;drawBoard();controls();},
   onDrop:(from,to)=>{selected=from;dragDrop=true;onSquare(to);dragDrop=false;},
   onCancel:()=>{selected=null;drawBoard();}
 });

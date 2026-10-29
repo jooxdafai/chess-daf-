@@ -38,8 +38,8 @@ try{
   {
     const {context,page}=await fresh();const block=await gate(page);await start(page);await block.waiting;
     await queue(page,'g1','f3');await queue(page,'b1','c3');block.release();
-    await page.waitForFunction(()=>document.querySelectorAll('.move-row').length===2&&!document.querySelector('#hint').disabled);
-    assert.equal((await state(page)).moves[2].uci,'b1c3','the latest choice replaces, rather than appends to, the queue');await context.close();
+    await page.waitForFunction(()=>document.querySelectorAll('.move-row').length===3&&!document.querySelector('#hint').disabled);
+    const game=await state(page);assert.equal(game.moves[2].uci,'g1f3');assert.equal(game.moves[4].uci,'b1c3','a new choice appends to the queue');await context.close();
   }
   {
     const {context,page}=await fresh();const block=await gate(page);await start(page);await block.waiting;await queue(page,'a1','a8');block.release();
