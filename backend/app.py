@@ -10,6 +10,7 @@ from werkzeug.exceptions import HTTPException
 from .game import GameStore
 from .engine import Engine, EngineBusy, EngineUnavailable
 from .coach import explain_move
+from .learning import Learning
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -24,6 +25,8 @@ def create_app(config=None):
     app.extensions['games'] = store
     engine = app.config.get('ENGINE') or Engine()
     app.extensions['engine'] = engine
+    learning=Learning(store)
+    app.extensions['learning']=learning
 
     @app.before_request
     def guard():
@@ -128,10 +131,28 @@ def create_app(config=None):
             raise ValueError('المراجعة الكاملة بعد الماتش؛ التلميحات متاحة في وضع التدريب')
         cached=store.review(game_id)
         if cached is not None:
+            learning.from_review(game_id,cached)
             return jsonify(cached)
         result=engine.review(game)
         store.save_review(game_id,result)
+        learning.from_review(game_id,result)
         return jsonify(result)
+
+    @app.get('/api/practice')
+    def practice():
+        return jsonify(learning.list())
+
+    @app.post('/api/practice/<puzzle_id>/attempt')
+    def attempt(puzzle_id):
+        return jsonify(learning.attempt(puzzle_id,request.json.get('uci')))
+
+    @app.post('/api/practice/<puzzle_id>/hint')
+    def puzzle_hint(puzzle_id):
+        return jsonify(learning.hint(puzzle_id))
+
+    @app.get('/api/progress')
+    def progress():
+        return jsonify(learning.progress())
 
     @app.get('/api/games/<uuid:game_id>/pgn')
     def pgn(game_id):
