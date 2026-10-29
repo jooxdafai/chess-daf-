@@ -1,5 +1,12 @@
 # Chess DAF — deployment evidence, 2026-10-29
 
+## Current release: silent successful premoves — 2026-10-29
+- Runtime `9d9252d9a92704cefb5222fc626d726363e45dcf` at https://jooflow.space/chess-daf/. Successful premoves clear/hide the notice instead of showing the green success banner; illegal/error notices remain. Later evidence-only commit changes no runtime files.
+- Added assertion failed before the fix and passed in the complete local premove suite. JS syntax/diff checks passed. Direct Marja review: no confirmed feature-related vulnerabilities within the narrow display-change scope; `docs/reviews/11-quiet-premove.md`.
+- Public HTTPS/native Stockfish run passed the silent-success assertion and preceding common scenarios, then timed out awaiting recovery because the real bot endpoint returned HTTP503. Service logs also show an EngineUnavailable503 before this deployment; no engine code changed. The full live suite is therefore **not** recorded as passing. A subsequent focused real-browser check passed both silent successful execution and simulated connection-error followed by sync without replay. Seeded positions were local-only; backend/drag/layout suites were not repeated for this one-line display change.
+- Backend/deploy/requirements/HTML/CSS/drag/premove modules byte-matched the preceding release. Only `chess-daf.service` restarted; no DB or nginx/Joo Flow changes. Served app.js SHA256 verified through loopback and public HTTPS. Local fixture stopped.
+- Rollback pointer `/var/backups/chess-daf/quiet-premove-20261029T210655Z/previous-release.txt`; restore release pointer and restart only Chess DAF. No database restore needed.
+
 ## Current release: mouse/touch piece dragging — 2026-10-29
 - Runtime `ffa4ff23f8dbaec095907f29a8500b49a164fac3` at https://jooflow.space/chess-daf/. This evidence-only follow-up changes no runtime code. Viewport fitting, dark theme and premoves are retained.
 - Hold a human piece and drag it on the playing board; a visual follows the pointer and highlights valid destinations. Legal drops use the existing move/premove/promotion path. Illegal/outside drops, Escape, flip, pointer cancellation/focus loss and server updates cancel the held piece. Click and keyboard moves remain available. Puzzle boards retain tap controls.
