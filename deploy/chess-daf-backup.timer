@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily Chess DAF backup
+
+[Timer]
+OnCalendar=*-*-* 03:45:00 UTC
+Persistent=true
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target

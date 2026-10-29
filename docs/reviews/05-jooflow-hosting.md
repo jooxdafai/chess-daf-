@@ -1,0 +1,8 @@
+# Marja — Joo Flow hosting
+Base: defe436 (personal-training PR). Direct review of final deployment diff, shared app guards, nginx authentication flow, systemd privileges, backup source/destination and CI permissions.
+
+No confirmed feature-related vulnerabilities found in scope. The additive TLS route authenticates through Joo Flow before forwarding; client identity is overwritten and cookies/Authorization stripped. Backend is loopback-only and uses a fixed exact Origin. Dedicated unprivileged service has read-only host filesystem, state-only write access, no new privileges, CPU/memory/task caps and a single-worker engine lock. Existing services need no restart. Backups are outside web roots, created exclusively at 0600 (existing copies cannot be overwritten), using read-only source SQLite plus online backup and integrity verification. Backup process is also unprivileged. CI uses commit-pinned official actions, read-only contents permission and no persisted checkout credentials.
+
+Verification before staging: 23 local tests passed; native engine test is Linux-only. Browser end-to-end regression verified that a fresh game clears the previous lesson. A regression test demonstrated backup overwrite risk when reusing a destination; exclusive creation fixes it, preserving the earlier snapshot. No runtime dependency changes since the nine-dependency advisory audit.
+
+Deployment verification and revision are recorded in docs/deployment-evidence.md after execution. Remaining scope assumptions: all authorized Joo Flow logins share this owner workspace; this is not multi-tenant authorization. Review quality is from bounded quick searches. No blanket security claim for Joo Flow or unrelated server apps; no penetration testing of those systems.
