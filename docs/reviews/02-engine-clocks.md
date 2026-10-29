@@ -1,0 +1,6 @@
+# Marja — engine play and clocks
+Base: 32ca332 (foundation PR). Reviewed final engine/clock diff and complete callers in app.py, game.py and frontend.
+
+No confirmed vulnerabilities found in reviewed scope. Browser cannot set FEN, executable, engine options, turn ownership, clock remaining or results. Replayed plies fail transactionally. Engine path is operator configuration only, invoked as an argument list without a shell. A nonblocking process-wide lock allows one engine at a time (deployment must use one application worker); each request starts and closes its own engine, 1 thread, 16 MiB hash, 0.12–0.3s search and 5s engine protocol timeout. JSON and Origin guard cover the new endpoints. Time is server wall clock and persists across restarts; browser countdown is display-only. API limits settings and games to 600 half-moves/2,000 games. Timeout applies insufficient-material draw handling.
+
+Validation: 16 local tests passed, one native-engine test deferred to the target Linux host where the binary is installed; JS syntax and diff checks passed. Tests include fail-closed unavailable engine, busy-engine rejection, turn spoof rejection, training-only hint gating, bounded settings and timeout after reopening storage. No multi-user isolation claim: deployment is the authenticated owner's shared Joo Flow workspace.
