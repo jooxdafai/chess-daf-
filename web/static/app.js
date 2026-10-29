@@ -1,7 +1,9 @@
 import {candidatePremoves,resolvePremove} from './premove.mjs';
+import {attachBoardDrag} from './drag.mjs';
 const $ = (selector) => document.querySelector(selector);
 let game = null, selected = null, flipped = false, busy = false, pendingPromotion = null;
 let premove = null, botPending = false, pendingPromotionPremove = false;
+let boardDrag = null;
 let seconds = 0;
 let receivedAt = performance.now(), timeoutSync = false;
 let review = null, reviewCursor = -1, showBest = false, reviewBusy = false;
@@ -55,7 +57,7 @@ function render(){
   $('#opponent-status').textContent=game?.settings.mode==='match'?'ماتش من غير مساعدة':'وضع التدريب';
   controls(); clocks();
 }
-function accept(next){if(next.id!==game?.id){review=null;reviewCursor=-1;showBest=false;premove=null;selected=null;pendingPromotionPremove=false;$('#review-nav').hidden=true;$('#coach-content').replaceChildren(...Array.from(initialCoach.childNodes).map(n=>n.cloneNode(true)));$('#promotion').hidden=true;pendingPromotion=null;}if(next.result){premove=null;selected=null;pendingPromotion=null;pendingPromotionPremove=false;$('#promotion').hidden=true;}game=next;receivedAt=performance.now();timeoutSync=false;localStorage.setItem('chess-daf-game',game.id);render();}
+function accept(next){boardDrag?.cancel();if(next.id!==game?.id){review=null;reviewCursor=-1;showBest=false;premove=null;selected=null;pendingPromotionPremove=false;$('#review-nav').hidden=true;$('#coach-content').replaceChildren(...Array.from(initialCoach.childNodes).map(n=>n.cloneNode(true)));$('#promotion').hidden=true;pendingPromotion=null;}if(next.result){premove=null;selected=null;pendingPromotion=null;pendingPromotionPremove=false;$('#promotion').hidden=true;}game=next;receivedAt=performance.now();timeoutSync=false;localStorage.setItem('chess-daf-game',game.id);render();}
 function canInteract(){return !!game&&!game.result&&(botPending||(!busy&&game.turn===game.settings.color));}
 function controls(){
   document.querySelectorAll('#board .square').forEach(b=>b.disabled=!canInteract());
@@ -92,7 +94,7 @@ async function onSquare(square){
   if(selected){const moves=game.legal_moves.filter(m=>m.startsWith(selected+square));if(moves.length){if(moves[0].length===5){pendingPromotion=moves;pendingPromotionPremove=false;$('#promotion').hidden=false;return;}await play(moves[0]);return;}}
   selected=game.legal_moves.some(m=>m.startsWith(square))?square:null;drawBoard();
 }
-function cancelPremove(){premove=null;selected=null;pendingPromotion=null;pendingPromotionPremove=false;$('#promotion').hidden=true;drawBoard();controls();}
+function cancelPremove(){boardDrag?.cancel();premove=null;selected=null;pendingPromotion=null;pendingPromotionPremove=false;$('#promotion').hidden=true;drawBoard();controls();}
 function submitPremove(uci){
   if(!game||game.result)return;
   selected=null;
@@ -115,11 +117,11 @@ async function botTurn(){
   }
 }
 async function play(uci){setBusy(true);try{selected=null;accept(await api(`games/${game.id}/move`,{uci,ply:game.ply}));notify('');await botTurn();}catch(e){notify(`${e.message} · اضغط تحديث للمحاولة تاني`,true);}finally{setBusy(false);}}
-async function newGame(){cancelPremove();setBusy(true);try{selected=null;flipped=$('#color').value==='black';accept(await api('games',{mode:$('#mode').value,color:$('#color').value,level:Number($('#level').value),seconds}));notify('بدأنا! اضغط على القطعة، وبعدين على مربع الوصول.');await botTurn();}catch(e){notify(e.message,true);}finally{setBusy(false);}}
+async function newGame(){cancelPremove();setBusy(true);try{selected=null;flipped=$('#color').value==='black';accept(await api('games',{mode:$('#mode').value,color:$('#color').value,level:Number($('#level').value),seconds}));notify('بدأنا! اسحب القطعة لمربع الوصول، أو اضغط عليها وبعدين على المربع.');await botTurn();}catch(e){notify(e.message,true);}finally{setBusy(false);}}
 async function sync(){if(busy||!game)return;cancelPremove();setBusy(true);try{accept(await api(`games/${game.id}`));notify('');await botTurn();}catch(e){notify(e.message,true);}finally{setBusy(false);}}
 $('#new-game').addEventListener('click',()=>{if(game&&!game.result)$('#confirm-dialog').showModal();else newGame();});
 $('#confirm-new').addEventListener('click',()=>{$('#confirm-dialog').close();newGame();});$('#cancel-new').addEventListener('click',()=>$('#confirm-dialog').close());
-$('#flip').addEventListener('click',()=>{flipped=!flipped;drawBoard();});
+$('#flip').addEventListener('click',()=>{boardDrag?.cancel();flipped=!flipped;drawBoard();});
 $('#sync').addEventListener('click',sync);
 $('#hint').addEventListener('click',async()=>{setBusy(true);try{const hint=await api(`games/${game.id}/hint`,{});selected=hint.uci.slice(0,2);drawBoard();const box=$('#coach-content');box.replaceChildren();const note=node('div','','coach-note');note.append(node('h3',`جرّب ${hint.san}`),node('p',hint.explanation));box.append(note);notify(`من ${hint.uci.slice(0,2)} إلى ${hint.uci.slice(2,4)} · تحليل سريع تقديري.`);}catch(e){notify(e.message,true);}finally{setBusy(false);}});
 $('#resign').addEventListener('click',async()=>{if(!confirm('تنهي الماتش بالاستسلام؟'))return;setBusy(true);try{accept(await api(`games/${game.id}/resign`,{}));notify('الماتش اتحفظ. نراجع ونتعلّم منه.');}catch(e){notify(e.message,true);}finally{setBusy(false);}});
@@ -131,6 +133,18 @@ document.querySelectorAll('[data-time]').forEach(b=>b.addEventListener('click',(
 function switchTab(tab){document.querySelectorAll('.nav').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));for(const key of ['play','history','practice'])$(`#${key}-view`).hidden=key!==tab;}
 document.querySelectorAll('[data-tab]').forEach(b=>b.addEventListener('click',async()=>{switchTab(b.dataset.tab);if(b.dataset.tab==='history')await history();if(b.dataset.tab==='practice')await practice();}));
 async function history(){try{const games=await api('games');const list=$('#history-list');list.replaceChildren();if(!games.length)list.textContent='لسه مفيش ماتشات. أول ماتش هو البداية.';for(const g of games){const row=document.createElement('div');row.className='history-item';const info=document.createElement('div');info.textContent=g.result?`النتيجة ${g.result}`:'ماتش محفوظ';const date=document.createElement('small');date.textContent=`${new Date(g.created_at*1000).toLocaleString('ar-EG')} · ${g.ply} نقلة`;info.append(date);const open=document.createElement('button');open.className='secondary';open.textContent='افتح الماتش ↗';open.addEventListener('click',async()=>{selected=null;flipped=g.settings.color==='black';accept(g);switchTab('play');await sync();});row.append(info,open);list.append(row);}}catch(e){notify(e.message,true);}}
+boardDrag=attachBoardDrag($('#board'),{
+  canStart:from=>{
+    if(!canInteract()||!$('#promotion').hidden)return false;
+    const piece=position(game.fen)[from];
+    return !!piece&&(piece===piece.toUpperCase())===(game.settings.color==='white');
+  },
+  canDrop:(from,to)=>canInteract()&&(botPending?candidatePremoves(position(game.fen),game.settings.color,from):game.legal_moves).some(m=>m.startsWith(from+to)),
+  positionKey:()=>`${game?.id}:${game?.ply}:${flipped}`,
+  onStart:from=>{selected=from;premove=null;drawBoard();controls();},
+  onDrop:(from,to)=>{selected=from;onSquare(to);},
+  onCancel:()=>{selected=null;drawBoard();}
+});
 drawBoard();
 function node(tag,text='',className=''){const n=document.createElement(tag);n.textContent=text;if(className)n.className=className;return n;}
 async function beginReview(){
