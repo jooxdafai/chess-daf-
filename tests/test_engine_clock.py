@@ -82,3 +82,13 @@ def test_real_stockfish_returns_legal_move_and_analysis():
     answer=engine.best(board)
     assert chess.Move.from_uci(answer['uci']) in board.legal_moves
     assert isinstance(answer['cp'],int)
+    from backend.game import GameStore
+    from tempfile import TemporaryDirectory
+    with TemporaryDirectory() as tmp:
+        store=GameStore(Path(tmp)/'real.sqlite')
+        game=store.create()
+        for i,uci in enumerate(['f2f3','e7e5','g2g4','d8h4']):
+            game=store.move(game['id'],uci,i)
+        review=engine.review(game)
+        assert len(review['moves'])==4
+        assert review['moves'][3]['best_san']=='Qh4#'

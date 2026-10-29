@@ -1,12 +1,15 @@
 import os
 import chess
+import chess.pgn
+from datetime import datetime, timezone
 from pathlib import Path
 
-from flask import Flask, abort, jsonify, request, send_from_directory
+from flask import Flask, Response, abort, jsonify, request, send_from_directory
 from werkzeug.exceptions import HTTPException
 
 from .game import GameStore
 from .engine import Engine, EngineBusy, EngineUnavailable
+from .coach import explain_move
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -108,10 +111,37 @@ def create_app(config=None):
         if game['settings']['mode']!='training' or game['result'] or game['turn']!=game['settings']['color']:
             raise ValueError('التلميح متاح في دورك بوضع التدريب بس')
         answer=engine.best(store.board(game))
-        return jsonify({**answer,'san':store.board(game).san(chess.Move.from_uci(answer['uci']))})
+        board=store.board(game)
+        suggested=chess.Move.from_uci(answer['uci'])
+        explanation,concept=explain_move(board,suggested)
+        return jsonify({**answer,'san':board.san(suggested),'explanation':explanation,'concept':concept})
 
     @app.post('/api/games/<uuid:game_id>/resign')
     def resign(game_id):
         return jsonify(store.resign(str(game_id)))
+
+    @app.post('/api/games/<uuid:game_id>/review')
+    def review(game_id):
+        game_id=str(game_id)
+        game=store.get(game_id)
+        if not game['result']:
+            raise ValueError('المراجعة الكاملة بعد الماتش؛ التلميحات متاحة في وضع التدريب')
+        cached=store.review(game_id)
+        if cached is not None:
+            return jsonify(cached)
+        result=engine.review(game)
+        store.save_review(game_id,result)
+        return jsonify(result)
+
+    @app.get('/api/games/<uuid:game_id>/pgn')
+    def pgn(game_id):
+        game=store.get(str(game_id))
+        exported=chess.pgn.Game.from_board(store.board(game))
+        exported.headers.update(Event='Chess DAF', White='Joo' if game['settings']['color']=='white' else 'Stockfish',
+                                Black='Joo' if game['settings']['color']=='black' else 'Stockfish',
+                                Date=datetime.fromtimestamp(game['created_at'],timezone.utc).strftime('%Y.%m.%d'),
+                                Result=game['result'] or '*')
+        return Response(str(exported)+'\n',mimetype='application/x-chess-pgn',
+                        headers={'Content-Disposition':f'attachment; filename="chess-daf-{game_id}.pgn"'})
 
     return app
