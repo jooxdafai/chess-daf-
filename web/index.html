@@ -8,12 +8,12 @@
 <div id="notice" class="notice" role="status" hidden></div>
 <section id="play-view" class="workspace">
 <aside class="setup card"><div class="card-heading"><span class="eyebrow">LET’S PLAY</span><h2>ماتش جديد</h2></div>
-<label for="mode">تحب تلعب إزاي؟</label><select id="mode"><option value="training">تدريب · بتلميحات</option><option value="match">ماتش · من غير مساعدة</option></select>
+<div class="setup-options"><label for="mode">تحب تلعب إزاي؟</label><select id="mode"><option value="training">تدريب · بتلميحات</option><option value="match">ماتش · من غير مساعدة</option></select>
 <label for="level">مستوى الخصم</label><select id="level"><option value="1">بداية هادية</option><option value="2">مبتدئ</option><option value="3" selected>تحدّي مناسب</option><option value="4">قوي</option><option value="5">أقصى قوة</option></select>
 <label>وقت الماتش</label><div class="time-options"><button data-time="60">1 دقيقة<small>Bullet</small></button><button data-time="180">3 دقايق<small>Blitz</small></button><button data-time="600">10 دقايق<small>Rapid</small></button><button class="selected" data-time="0">براحتك<small>تعلّم من غير ساعة</small></button></div>
 <label for="color">لون قطعك</label><select id="color"><option value="white">الأبيض · أنا أبدأ</option><option value="black">الأسود · المحرك يبدأ</option></select>
-<button id="new-game" class="primary">ابدأ ماتش <span>↗</span></button>
-<div class="quiet-tip"><span>✦</span><p>لسه بتبدأ؟ خليك في التدريب من غير ساعة. لما تاخد ثقة، جرّب الدقيقة.</p></div>
+</div><div class="setup-footer"><button id="new-game" class="primary">ابدأ ماتش <span>↗</span></button>
+<div class="quiet-tip"><span>✦</span><p>لسه بتبدأ؟ خليك في التدريب من غير ساعة. لما تاخد ثقة، جرّب الدقيقة.</p></div></div>
 </aside>
 <section class="board-area" aria-label="منطقة اللعب"><div class="player"><div class="player-info"><span class="player-icon dark">♟</span><div><strong id="opponent-name">الخصم</strong><small id="opponent-status">جاهز للتحدّي</small></div></div><div id="opponent-clock" class="clock">∞</div></div>
 <div class="board-wrap"><div id="board" class="board" role="group" aria-label="رقعة الشطرنج"></div><div id="promotion" class="promotion card" hidden><strong>رقّي البيدق لإيه؟</strong><div><button data-promote="q">وزير ♛</button><button data-promote="r">رخ ♜</button><button data-promote="b">فيل ♝</button><button data-promote="n">حصان ♞</button></div></div></div>
