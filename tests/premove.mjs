@@ -24,7 +24,8 @@ try{
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
     await page.screenshot({path:'/tmp/chess-daf-premove-mobile.png',fullPage:true});
     block.release();await page.waitForFunction(()=>document.querySelectorAll('.move-row').length===2&&!document.querySelectorAll('.move-row')[1].textContent.includes('—'));
-    const game=await state(page);assert.equal(game.moves[2].uci,'g1f3');assert.equal(game.settings.seconds,60);assert.ok(game.clocks.white>0&&game.clocks.white<=60);assert.equal(posted,1);assert.equal(await page.locator('#premove-bar').isHidden(),true);await context.close();
+    const game=await state(page);assert.equal(game.moves[2].uci,'g1f3');assert.equal(game.settings.seconds,60);assert.ok(game.clocks.white>0&&game.clocks.white<=60);assert.equal(posted,1);assert.equal(await page.locator('#premove-bar').isHidden(),true);
+    assert.equal(await page.locator('#notice').isHidden(),true,'successful premoves must not leave a notification banner');await context.close();
   }
   for(const cancel of ['button','escape','rightclick']){
     const {context,page}=await fresh();const block=await gate(page);await start(page);await block.waiting;await queue(page,'g1','f3');

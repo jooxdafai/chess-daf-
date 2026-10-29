@@ -1,0 +1,5 @@
+# Marja — silent successful premove, 2026-10-29
+
+Directly reviewed the final diff against `96367f5` (PR #10): the success branch in `web/static/app.js:113` now calls `notify('')` to clear/hide the notice instead of displaying a success message. Reviewed `notify`, the surrounding bot/move/error paths, the updated browser assertion and existing backend Origin/owner/turn/ply/legality guards. No new endpoint, input sink, dependency, identity or deployment setting. No confirmed feature-related security vulnerabilities or unresolved candidates within this narrow scope; this is not a whole-project or dependency-advisory audit.
+
+Verification: the new browser assertion failed on the prior implementation (notice visible) and passed after the change. Full local premove suite passed, including exactly-once legal execution, invalid-move notice and simulated connection-error notice/recovery. JS syntax and diff checks passed. Backend tests were not rerun for this display-only change. Live deployment evidence is recorded separately. No delegation.
