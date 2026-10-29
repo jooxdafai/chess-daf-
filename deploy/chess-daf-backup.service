@@ -1,0 +1,16 @@
+[Unit]
+Description=Consistent Chess DAF SQLite backup
+
+[Service]
+Type=oneshot
+User=chess-daf
+Group=chess-daf
+ExecStart=/opt/chess-daf/venv/bin/python /opt/chess-daf/current/deploy/backup.py
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/backups/chess-daf/data /var/lib/chess-daf
+RestrictAddressFamilies=AF_UNIX
+MemoryMax=128M

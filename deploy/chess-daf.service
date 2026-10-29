@@ -1,0 +1,35 @@
+[Unit]
+Description=Chess DAF private chess and learning
+After=network.target
+
+[Service]
+Type=simple
+User=chess-daf
+Group=chess-daf
+WorkingDirectory=/opt/chess-daf/current
+Environment=CHESS_DATABASE=/var/lib/chess-daf/chess.sqlite
+Environment=CHESS_ORIGIN=https://jooflow.space
+Environment=STOCKFISH_PATH=/usr/games/stockfish
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/opt/chess-daf/venv/bin/gunicorn backend.app:create_app() --bind 127.0.0.1:18971 --workers 1 --threads 4 --timeout 120 --access-logfile - --error-logfile -
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=15
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/chess-daf
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+CPUQuota=100%
+MemoryMax=384M
+TasksMax=64
+Nice=5
+
+[Install]
+WantedBy=multi-user.target

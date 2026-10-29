@@ -5,6 +5,7 @@ let receivedAt = performance.now(), timeoutSync = false;
 let review = null, reviewCursor = -1, showBest = false, reviewBusy = false;
 const reviewAttempted = new Set();
 const pieceNames = {p:'بيدق',n:'حصان',b:'فيل',r:'رخ',q:'وزير',k:'ملك'};
+const initialCoach=$('#coach-content').cloneNode(true);
 const startFen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
 function notify(message, error = false) {
   const node = $('#notice'); node.textContent = message; node.classList.toggle('error', error); node.hidden = !message;
@@ -26,6 +27,7 @@ function drawBoard(fen) {
   const last=review&&reviewCursor>=0 ? review.moves[reviewCursor]?.[showBest?'best_uci':'uci']||'' : game?.moves.at(-1)?.uci || '';
   for(const rank of ranks) for(const file of files){
     const sq=file+rank, piece=pieces[sq], b=document.createElement('button'); b.type='button'; b.dataset.square=sq;
+    b.disabled=busy||!game||!!game.result||game.turn!==game.settings.color;
     b.className=`square ${(file.charCodeAt(0)-97+rank)%2===0?'dark':''}`;
     b.setAttribute('aria-label',`${sq}${piece ? ` ${piece===piece.toUpperCase()?'أبيض':'أسود'} ${pieceNames[piece.toLowerCase()]}`:''}`);
     b.classList.toggle('selected',sq===selected); b.classList.toggle('last',last.slice(0,2)===sq||last.slice(2,4)===sq);
@@ -47,8 +49,9 @@ function render(){
   $('#opponent-status').textContent=game?.settings.mode==='match'?'ماتش من غير مساعدة':'وضع التدريب';
   controls(); clocks();
 }
-function accept(next){if(next.id!==game?.id){review=null;reviewCursor=-1;showBest=false;$('#review-nav').hidden=true;}game=next;receivedAt=performance.now();timeoutSync=false;localStorage.setItem('chess-daf-game',game.id);render();}
+function accept(next){if(next.id!==game?.id){review=null;reviewCursor=-1;showBest=false;$('#review-nav').hidden=true;$('#coach-content').replaceChildren(...Array.from(initialCoach.childNodes).map(n=>n.cloneNode(true)));$('#promotion').hidden=true;pendingPromotion=null;}game=next;receivedAt=performance.now();timeoutSync=false;localStorage.setItem('chess-daf-game',game.id);render();}
 function controls(){
+  document.querySelectorAll('#board .square').forEach(b=>b.disabled=busy||!game||!!game.result||game.turn!==game.settings.color);
   $('#hint').disabled=busy||!game||!!game.result||game.settings.mode!=='training'||game.turn!==game.settings.color;
   $('#resign').disabled=busy||!game||!!game.result;
   $('#new-game').disabled=busy||reviewBusy;
