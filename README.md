@@ -22,3 +22,6 @@ A completed game is analysed automatically in the UI, with retry and cached resu
 Three starter puzzles plus up to five exercises from your biggest inaccuracies per reviewed game. Your attempts, solved status and use of hints survive reload/restart. Personal exercises ask for the stored engine recommendation, not a claim that no alternative move is good. Progress shows recent 12 reviewed-game scores and weak concepts; it is not an official rating.
 
 Browser verification: install `@playwright/test` in a disposable tooling directory. Run `.venv/bin/python tests/ui_server.py /tmp/unique-chess-test.sqlite`, then `CHESS_PLAYWRIGHT_MODULE=/absolute/path/to/@playwright/test/index.mjs node tests/browser.mjs` (Google Chrome installed). This uses a scripted test engine and separate SQLite database; production never imports it. Use a fresh disposable DB each run. The Python suite includes a separate native Stockfish integration test.
+
+## Live installation
+**https://jooflow.space/chess-daf/** — sign into Joo Flow first. Runtime runs entirely on the server. See [deployment runbook](deploy/README.md) and [executed verification](docs/deployment-evidence.md). Feature PRs form an open stack (merge in dependency order); each includes a scoped Marja review. No PR has been merged by the build task.
