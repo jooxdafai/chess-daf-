@@ -1,0 +1,8 @@
+# Marja — dark theme and readability
+Base: 8ad00bf. Reviewed final diff against the preceding passwordless release, including normalized CSS rule differences, the HTML theme-color change, Flask static/CSP serving and the unchanged public nginx/session guards.
+
+No confirmed vulnerabilities found within this narrow scope. Runtime changes are limited to the stylesheet and a fixed mobile browser theme-color value. Existing local CSS import, asset URLs, scripts, API endpoints, session/cookie behavior, ownership checks and deployment configuration are unchanged. The CSS adds no remote URL, dynamic input, overlay that bypasses a guard, or rule hiding security/error messages. Status colors, focus indicators, selected squares and check markers retain distinct visible states. No runtime dependency changes or new credential handling.
+
+Executed verification: full Chrome play/bot/reload/hint/resign/review/alternative/exercise/persistence flow passed against the isolated public fixture. Desktop, mobile and training screenshots inspected. A computed-style probe of sampled visible text measured minimum contrast 4.98:1, board square contrast 2.07:1; no horizontal overflow at 360px/390px and no JS page errors. These samples are not a full accessibility conformance audit. CSS formatting was inspected after normalizing whitespace; git diff --check passed.
+
+The fixture deliberately uses a scripted engine; engine/auth/storage code is unchanged and no claim of a new native-engine/backend audit is made. Live theme checks and deployed revision will be recorded after publishing. Review performed directly by the current agent; no delegation.
