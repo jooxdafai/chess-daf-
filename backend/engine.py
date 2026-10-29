@@ -5,6 +5,7 @@ from contextlib import contextmanager
 from pathlib import Path
 
 import chess.engine
+from .coach import build_review
 
 
 class EngineBusy(Exception):
@@ -46,3 +47,21 @@ class Engine:
             info=engine.analyse(board,chess.engine.Limit(time=.2))
             return {'uci':info['pv'][0].uci(),'cp':info['score'].white().score(mate_score=10000),
                     'depth':info.get('depth',0)}
+
+    def review(self, game):
+        positions=[]
+        board=chess.Board(game['start_fen'])
+        with self.session() as engine:
+            for index in range(len(game['moves'])+1):
+                if board.is_game_over(claim_draw=True):
+                    outcome=board.outcome(claim_draw=True)
+                    positions.append({'cp':0 if outcome.winner is None else (10000 if outcome.winner else -10000),
+                                      'uci':None,'depth':0,'pv':[]})
+                else:
+                    info=engine.analyse(board,chess.engine.Limit(time=.08))
+                    positions.append({'cp':info['score'].white().score(mate_score=10000),
+                                      'uci':info['pv'][0].uci(),'depth':info.get('depth',0),
+                                      'pv':[m.uci() for m in info['pv'][:5]]})
+                if index<len(game['moves']):
+                    board.push_uci(game['moves'][index]['uci'])
+        return build_review(game,positions)

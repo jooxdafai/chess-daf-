@@ -17,6 +17,7 @@ class GameStore:
         with sqlite3.connect(self.path) as db:
             db.execute('PRAGMA journal_mode=WAL')
             db.execute('CREATE TABLE IF NOT EXISTS games (id TEXT PRIMARY KEY, state TEXT NOT NULL)')
+            db.execute('CREATE TABLE IF NOT EXISTS reviews (game_id TEXT PRIMARY KEY, data TEXT NOT NULL)')
 
     @contextmanager
     def connection(self):
@@ -148,3 +149,14 @@ class GameStore:
                 game.update(result='0-1' if game['settings']['color']=='white' else '1-0', reason='resignation')
             self.write(db,game)
             return self.view(game)
+
+    def review(self, game_id):
+        with self.connection() as db:
+            self.read(db,game_id)
+            row=db.execute('SELECT data FROM reviews WHERE game_id=?',(game_id,)).fetchone()
+            return json.loads(row[0]) if row else None
+
+    def save_review(self, game_id, review):
+        with self.connection() as db:
+            self.read(db,game_id)
+            db.execute('INSERT OR REPLACE INTO reviews VALUES (?,?)',(game_id,json.dumps(review)))
