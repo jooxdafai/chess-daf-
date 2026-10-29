@@ -17,3 +17,8 @@ Install distribution Stockfish (`apt-get install stockfish` on Ubuntu) or set `S
 
 ## Arabic review
 A completed game is analysed automatically in the UI, with retry and cached results. Every half-move gets a best alternative, legal continuation, Arabic lesson and centipawn loss from the mover's perspective. The score `/100` is our simple average `100*exp(-loss/300)`, not Chess.com's accuracy or an Elo rating. Quick searches may change their recommendation at greater depth. PGN can be exported without changing the game. No paid language model is required; explanations state verified chess facts with deterministic Arabic templates.
+
+## Personal training
+Three starter puzzles plus up to five exercises from your biggest inaccuracies per reviewed game. Your attempts, solved status and use of hints survive reload/restart. Personal exercises ask for the stored engine recommendation, not a claim that no alternative move is good. Progress shows recent 12 reviewed-game scores and weak concepts; it is not an official rating.
+
+Browser verification: install `@playwright/test` in a disposable tooling directory. Run `.venv/bin/python tests/ui_server.py /tmp/unique-chess-test.sqlite`, then `CHESS_PLAYWRIGHT_MODULE=/absolute/path/to/@playwright/test/index.mjs node tests/browser.mjs` (Google Chrome installed). This uses a scripted test engine and separate SQLite database; production never imports it. Use a fresh disposable DB each run. The Python suite includes a separate native Stockfish integration test.
