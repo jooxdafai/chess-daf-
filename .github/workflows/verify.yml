@@ -18,5 +18,7 @@ jobs:
       - run: python -m pytest -q
       - run: node --check web/static/app.js
       - run: node --check web/static/drag.mjs
+      - run: node --check web/static/board-view.mjs
+      - run: node --test tests/board-view-unit.mjs
       - run: node --test tests/premove-unit.mjs
       - run: git diff --check

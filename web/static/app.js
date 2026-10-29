@@ -1,9 +1,11 @@
 import {candidatePremoves,resolvePremove} from './premove.mjs';
 import {attachBoardDrag} from './drag.mjs';
+import {createBoardView,projectMove} from './board-view.mjs';
 const $ = (selector) => document.querySelector(selector);
 let game = null, selected = null, flipped = false, busy = false, pendingPromotion = null;
 let premove = null, botPending = false, pendingPromotionPremove = false;
-let boardDrag = null;
+let boardDrag = null, pendingVisual = null, dragDrop = false, pendingPromotionAnimate = true;
+const boardView=createBoardView($('#board'),sq=>onSquare(sq));
 let seconds = 0;
 let receivedAt = performance.now(), timeoutSync = false;
 let review = null, reviewCursor = -1, showBest = false, reviewBusy = false;
@@ -24,14 +26,15 @@ async function api(path, body) {
 function position(fen) {
   const map = {}; fen.split(' ')[0].split('/').forEach((row,r) => { let file=0; for (const piece of row) { if (/\d/.test(piece)) file+=Number(piece); else map[`${'abcdefgh'[file++]}${8-r}`]=piece; } }); return map;
 }
-function drawBoard(fen) {
+function drawBoard(fen,animate=true) {
   fen=fen || (review&&reviewCursor>=0 ? review.moves[reviewCursor]?.[showBest?'best_fen':'fen_before']:null) || game?.fen || startFen;
-  const pieces=position(fen), board=$('#board'); board.replaceChildren();
+  const pieces=pendingVisual?.pieces||position(fen);
+  const squares=boardView.render(pieces,{flipped,animate,move:pendingVisual?.uci||game?.moves.at(-1)?.uci||''});
   const files=[...'abcdefgh'], ranks=[8,7,6,5,4,3,2,1]; if(flipped){files.reverse();ranks.reverse();}
   const last=review&&reviewCursor>=0 ? review.moves[reviewCursor]?.[showBest?'best_uci':'uci']||'' : game?.moves.at(-1)?.uci || '';
   const future=selected&&botPending?candidatePremoves(pieces,game.settings.color,selected):null;
   for(const rank of ranks) for(const file of files){
-    const sq=file+rank, piece=pieces[sq], b=document.createElement('button'); b.type='button'; b.dataset.square=sq;
+    const sq=file+rank, piece=pieces[sq], b=squares.get(sq);
     b.disabled=!canInteract();
     b.className=`square ${(file.charCodeAt(0)-97+rank)%2===0?'dark':''}`;
     b.setAttribute('aria-label',`${sq}${piece ? ` ${piece===piece.toUpperCase()?'أبيض':'أسود'} ${pieceNames[piece.toLowerCase()]}`:''}`);
@@ -41,10 +44,7 @@ function drawBoard(fen) {
     b.classList.toggle('premove-target',premove?.uci.slice(2,4)===sq);
     if(selected&&(future||game?.legal_moves||[]).some(m=>m.startsWith(selected+sq))){b.classList.add('legal');if(piece)b.classList.add('capture');}
     if(reviewCursor<0&&game?.check&&piece?.toLowerCase()==='k'&&(piece===piece.toUpperCase())===(game.turn==='white'))b.classList.add('in-check');
-    if(piece){const img=document.createElement('img');img.src=`static/pieces/${piece===piece.toUpperCase()?'w':'b'}${piece.toLowerCase()}.svg`;img.alt='';img.draggable=false;b.append(img);}
-    if(file===files[0]){const c=document.createElement('span');c.className='coord';c.textContent=rank;b.append(c);}
-    if(rank===ranks.at(-1)){const c=document.createElement('span');c.className='coord file';c.textContent=file;b.append(c);}
-    b.addEventListener('click',()=>onSquare(sq));board.append(b);
+
   }
 }
 function render(){
@@ -57,7 +57,7 @@ function render(){
   $('#opponent-status').textContent=game?.settings.mode==='match'?'ماتش من غير مساعدة':'وضع التدريب';
   controls(); clocks();
 }
-function accept(next){boardDrag?.cancel();if(next.id!==game?.id){review=null;reviewCursor=-1;showBest=false;premove=null;selected=null;pendingPromotionPremove=false;$('#review-nav').hidden=true;$('#coach-content').replaceChildren(...Array.from(initialCoach.childNodes).map(n=>n.cloneNode(true)));$('#promotion').hidden=true;pendingPromotion=null;}if(next.result){premove=null;selected=null;pendingPromotion=null;pendingPromotionPremove=false;$('#promotion').hidden=true;}game=next;receivedAt=performance.now();timeoutSync=false;localStorage.setItem('chess-daf-game',game.id);render();}
+function accept(next){boardDrag?.cancel();pendingVisual=null;if(next.id!==game?.id){review=null;reviewCursor=-1;showBest=false;premove=null;selected=null;pendingPromotionPremove=false;$('#review-nav').hidden=true;$('#coach-content').replaceChildren(...Array.from(initialCoach.childNodes).map(n=>n.cloneNode(true)));$('#promotion').hidden=true;pendingPromotion=null;}if(next.result){premove=null;selected=null;pendingPromotion=null;pendingPromotionPremove=false;$('#promotion').hidden=true;}game=next;receivedAt=performance.now();timeoutSync=false;localStorage.setItem('chess-daf-game',game.id);render();}
 function canInteract(){return !!game&&!game.result&&(botPending||(!busy&&game.turn===game.settings.color));}
 function controls(){
   document.querySelectorAll('#board .square').forEach(b=>b.disabled=!canInteract());
@@ -91,7 +91,7 @@ async function onSquare(square){
     if(moves.length){if(moves[0].length===5){pendingPromotion=moves;pendingPromotionPremove=true;$('#promotion').hidden=false;}else submitPremove(moves[0]);return;}
     premove=null;selected=pieces[square]&&(pieces[square]===pieces[square].toUpperCase())===(game.settings.color==='white')?square:null;drawBoard();controls();return;
   }
-  if(selected){const moves=game.legal_moves.filter(m=>m.startsWith(selected+square));if(moves.length){if(moves[0].length===5){pendingPromotion=moves;pendingPromotionPremove=false;$('#promotion').hidden=false;return;}await play(moves[0]);return;}}
+  if(selected){const moves=game.legal_moves.filter(m=>m.startsWith(selected+square));if(moves.length){if(moves[0].length===5){pendingPromotion=moves;pendingPromotionPremove=false;pendingPromotionAnimate=!dragDrop;$('#promotion').hidden=false;return;}await play(moves[0],!dragDrop);return;}}
   selected=game.legal_moves.some(m=>m.startsWith(square))?square:null;drawBoard();
 }
 function cancelPremove(){boardDrag?.cancel();premove=null;selected=null;pendingPromotion=null;pendingPromotionPremove=false;$('#promotion').hidden=true;drawBoard();controls();}
@@ -110,14 +110,19 @@ async function botTurn(){
       botPending=false;premove=null;accept(next);
       if(queued){
         const uci=resolvePremove(queued,game);selected=null;
-        if(uci){accept(await api(`games/${game.id}/move`,{uci,ply:game.ply}));notify('');}
+        if(uci)await submitMove(uci);
         else if(!game.result)notify('النقلة المسبقة اتلغت لأنها مش قانونية في الموقف الجديد.');
       }
     }catch(error){cancelPremove();throw error;}finally{botPending=false;controls();}
   }
 }
-async function play(uci){setBusy(true);try{selected=null;accept(await api(`games/${game.id}/move`,{uci,ply:game.ply}));notify('');await botTurn();}catch(e){notify(`${e.message} · اضغط تحديث للمحاولة تاني`,true);}finally{setBusy(false);}}
-async function newGame(){cancelPremove();setBusy(true);try{selected=null;flipped=$('#color').value==='black';accept(await api('games',{mode:$('#mode').value,color:$('#color').value,level:Number($('#level').value),seconds}));notify('بدأنا! اسحب القطعة لمربع الوصول، أو اضغط عليها وبعدين على المربع.');await botTurn();}catch(e){notify(e.message,true);}finally{setBusy(false);}}
+async function submitMove(uci,animate=true){
+  selected=null;notify('');pendingVisual={uci,pieces:projectMove(position(game.fen),uci)};drawBoard(undefined,animate);
+  try{accept(await api(`games/${game.id}/move`,{uci,ply:game.ply}));}
+  catch(error){pendingVisual=null;drawBoard();throw error;}
+}
+async function play(uci,animate=true){setBusy(true);try{await submitMove(uci,animate);await botTurn();}catch(e){notify(`${e.message} · اضغط تحديث للمحاولة تاني`,true);}finally{setBusy(false);}}
+async function newGame(){cancelPremove();setBusy(true);try{selected=null;flipped=$('#color').value==='black';accept(await api('games',{mode:$('#mode').value,color:$('#color').value,level:Number($('#level').value),seconds}));notify('');await botTurn();}catch(e){notify(e.message,true);}finally{setBusy(false);}}
 async function sync(){if(busy||!game)return;cancelPremove();setBusy(true);try{accept(await api(`games/${game.id}`));notify('');await botTurn();}catch(e){notify(e.message,true);}finally{setBusy(false);}}
 $('#new-game').addEventListener('click',()=>{if(game&&!game.result)$('#confirm-dialog').showModal();else newGame();});
 $('#confirm-new').addEventListener('click',()=>{$('#confirm-dialog').close();newGame();});$('#cancel-new').addEventListener('click',()=>$('#confirm-dialog').close());
@@ -125,7 +130,7 @@ $('#flip').addEventListener('click',()=>{boardDrag?.cancel();flipped=!flipped;dr
 $('#sync').addEventListener('click',sync);
 $('#hint').addEventListener('click',async()=>{setBusy(true);try{const hint=await api(`games/${game.id}/hint`,{});selected=hint.uci.slice(0,2);drawBoard();const box=$('#coach-content');box.replaceChildren();const note=node('div','','coach-note');note.append(node('h3',`جرّب ${hint.san}`),node('p',hint.explanation));box.append(note);notify(`من ${hint.uci.slice(0,2)} إلى ${hint.uci.slice(2,4)} · تحليل سريع تقديري.`);}catch(e){notify(e.message,true);}finally{setBusy(false);}});
 $('#resign').addEventListener('click',async()=>{if(!confirm('تنهي الماتش بالاستسلام؟'))return;setBusy(true);try{accept(await api(`games/${game.id}/resign`,{}));notify('الماتش اتحفظ. نراجع ونتعلّم منه.');}catch(e){notify(e.message,true);}finally{setBusy(false);}});
-document.querySelectorAll('[data-promote]').forEach(b=>b.addEventListener('click',()=>{const move=pendingPromotion?.find(m=>m.endsWith(b.dataset.promote)),future=pendingPromotionPremove;$('#promotion').hidden=true;pendingPromotion=null;pendingPromotionPremove=false;if(move){if(future)submitPremove(move);else play(move);}}));
+document.querySelectorAll('[data-promote]').forEach(b=>b.addEventListener('click',()=>{const move=pendingPromotion?.find(m=>m.endsWith(b.dataset.promote)),future=pendingPromotionPremove;$('#promotion').hidden=true;pendingPromotion=null;pendingPromotionPremove=false;if(move){if(future)submitPremove(move);else play(move,pendingPromotionAnimate);}}));
 $('#cancel-premove').addEventListener('click',cancelPremove);
 $('#board').addEventListener('contextmenu',e=>{e.preventDefault();cancelPremove();});
 document.addEventListener('keydown',e=>{if(e.key==='Escape')cancelPremove();});
@@ -142,7 +147,7 @@ boardDrag=attachBoardDrag($('#board'),{
   canDrop:(from,to)=>canInteract()&&(botPending?candidatePremoves(position(game.fen),game.settings.color,from):game.legal_moves).some(m=>m.startsWith(from+to)),
   positionKey:()=>`${game?.id}:${game?.ply}:${flipped}`,
   onStart:from=>{selected=from;premove=null;drawBoard();controls();},
-  onDrop:(from,to)=>{selected=from;onSquare(to);},
+  onDrop:(from,to)=>{selected=from;dragDrop=true;onSquare(to);dragDrop=false;},
   onCancel:()=>{selected=null;drawBoard();}
 });
 drawBoard();

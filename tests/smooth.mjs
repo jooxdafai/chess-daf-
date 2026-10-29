@@ -1,0 +1,42 @@
+import assert from 'node:assert/strict';
+const {chromium}=await import(process.env.CHESS_PLAYWRIGHT_MODULE||'@playwright/test');
+const browser=await chromium.launch({channel:'chrome',headless:true});
+const base=process.env.CHESS_TEST_URL||'http://127.0.0.1:18972/';
+try{
+ const page=await browser.newPage();await page.goto(base);await page.locator('#new-game').click();await page.waitForFunction(()=>!document.querySelector('#hint').disabled);
+ await page.evaluate(()=>{window.firstSquare=document.querySelector('#board [data-square="e2"]');window.idlePiece=document.querySelector('#board [data-square="a1"] img');});
+ await page.locator('#board [data-square="e2"]').click();
+ assert.ok(await page.evaluate(()=>window.firstSquare===document.querySelector('#board [data-square="e2"]')),'selecting must preserve the board instead of rebuilding 64 squares');
+ let release;const hold=new Promise(r=>release=r);await page.route('**/api/games/*/move',async route=>{await hold;await route.continue();});
+ await page.locator('#board [data-square="e4"]').click();
+ assert.equal(await page.locator('#board [data-square="e4"] img').count(),1,'the dropped/clicked piece must remain at its destination while the server is pending');
+ assert.equal(await page.locator('#board [data-square="e2"] img').count(),0);
+ assert.ok(await page.evaluate(()=>window.idlePiece===document.querySelector('#board [data-square="a1"] img')));
+ release();await page.waitForFunction(()=>!document.querySelector('#hint').disabled);
+ assert.equal(await page.locator('#board [data-square="e4"] img').count(),1);
+ const before=await page.locator('#board').boundingBox();await page.locator('#premove-bar').evaluate(e=>e.hidden=false);
+ assert.deepEqual(await page.locator('#board').boundingBox(),before,'queue controls must not resize the board');await page.close();
+ const rejected=await browser.newPage();await rejected.goto(base);await rejected.locator('#new-game').click();await rejected.waitForFunction(()=>!document.querySelector('#hint').disabled);
+ let reject;const rejectGate=new Promise(r=>reject=r);
+ await rejected.route('**/api/games/*/move',async route=>{await rejectGate;await route.fulfill({status:400,json:{error:'Synthetic rejected move'}});});
+ const a=await rejected.locator('#board [data-square="e2"]').boundingBox(),b=await rejected.locator('#board [data-square="e4"]').boundingBox();
+ await rejected.mouse.move(a.x+a.width/2,a.y+a.height/2);await rejected.mouse.down();await rejected.mouse.move(b.x+b.width/2,b.y+b.height/2,{steps:10});await rejected.mouse.up();
+ assert.equal(await rejected.locator('#board [data-square="e4"] img').count(),1,'drag release must not snap back during latency');
+ assert.equal(await rejected.locator('#board [data-square="e2"] img').count(),0);
+ reject();await rejected.waitForFunction(()=>document.querySelector('#notice').textContent.includes('Synthetic rejected move'));
+ assert.equal(await rejected.locator('#board [data-square="e2"] img').count(),1);assert.equal(await rejected.locator('#board [data-square="e4"] img').count(),0);
+ const animation=await rejected.evaluate(async()=>{
+   const {createBoardView,projectMove}=await import('./static/board-view.mjs');
+   const b=document.createElement('div');b.className='board';b.style.cssText='position:fixed;left:0;top:0;width:320px;height:320px;z-index:2000';document.body.append(b);
+   const view=createBoardView(b,()=>{}),initial={a1:'R',e2:'P'};view.render(initial);
+   const pawn=b.querySelector('[data-square="e2"] img'),rook=b.querySelector('[data-square="a1"] img'),start=pawn.getBoundingClientRect().top;
+   view.render(projectMove(initial,'e2e4'),{move:'e2e4'});
+   const motion=pawn.getAnimations()[0];motion.pause();motion.currentTime=55;
+   const middle=pawn.getBoundingClientRect().top,end=b.querySelector('[data-square="e4"]').getBoundingClientRect().top;
+   const result={same:rook===b.querySelector('[data-square="a1"] img'),between:middle<start&&middle>end,sourceGone:!b.querySelector('[data-square="e2"] img')};
+   motion.finish();b.remove();return result;
+ });assert.deepEqual(animation,{same:true,between:true,sourceGone:true});
+ await rejected.emulateMedia({reducedMotion:'reduce'});
+ assert.equal(await rejected.evaluate(async()=>{const {createBoardView}=await import('./static/board-view.mjs');const b=document.createElement('div');document.body.append(b);const v=createBoardView(b,()=>{});v.render({e2:'P'});v.render({e4:'P'});const n=b.querySelector('img').getAnimations().length;b.remove();return n;}),0);
+ console.log('PASS: stable squares/pieces and immediate pending placement without server round-trip flicker.');
+}finally{await browser.close();}

@@ -34,7 +34,7 @@ export function attachBoardDrag(board,{canStart,canDrop,positionKey,onStart,onDr
       board.querySelector(`[data-square="${held.from}"]`)?.classList.add('drag-source');
     }
     event.preventDefault();
-    held.ghost.style.left=`${event.clientX-held.size/2}px`;held.ghost.style.top=`${event.clientY-held.size/2}px`;
+    held.ghost.style.transform=`translate3d(${event.clientX-held.size/2}px,${event.clientY-held.size/2}px,0)`;
     board.querySelector('.drag-target')?.classList.remove('drag-target');
     const target=squareAt(event.clientX,event.clientY);
     if(target&&canDrop(held.from,target.dataset.square))target.classList.add('drag-target');
