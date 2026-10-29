@@ -23,6 +23,11 @@ While Stockfish is thinking, tap your piece and its destination to queue one mov
 
 Run `node --test tests/premove-unit.mjs`. For browser coverage, start `.venv/bin/python tests/premove_server.py /tmp/unique-premove.sqlite`, then use the same `CHESS_PLAYWRIGHT_MODULE` variable with `node tests/premove.mjs`. The loopback-only fixture adds scripted capture, promotion and checkmate positions inside its executable entry point; these routes are never registered by the production app. `CHESS_PREMOVE_LIVE=1 CHESS_TEST_URL=https://jooflow.space/chess-daf/` runs the common browser scenarios with native Stockfish, skipping fixture-specific positions.
 
+## Drag pieces
+On the playing board, hold and drag your piece with the mouse or one finger, then release on its destination. The piece follows your pointer and valid destinations are highlighted. Click-to-move and keyboard button activation remain available. Dragging during the opponent request queues a premove; promotion opens the existing four-piece chooser. An illegal/outside drop, Escape, pointer cancellation, lost capture/focus, board flip or a server position update cancels the drag. Touch dragging is confined to the board; scroll the page from outside it. Puzzle boards keep their existing tap controls.
+
+With the isolated premove fixture running, use the same Playwright tooling variable with `node tests/drag.mjs`. It exercises actual mouse input and Chrome-emulated touch, one-minute play, exactly-once submission, legacy clicks/keyboard, invalid drops, cancellation, board flip, both colors, reply-during-drag, premoves and seeded underpromotion. `CHESS_DRAG_LIVE=1 CHESS_TEST_URL=https://jooflow.space/chess-daf/` runs common scenarios against native Stockfish, skipping the local promotion seed. Emulated touch is not a physical iOS/Android-device certification.
+
 ## Personal training
 Three starter puzzles plus up to five exercises from your biggest inaccuracies per reviewed game. Your attempts, solved status and use of hints survive reload/restart. Personal exercises ask for the stored engine recommendation, not a claim that no alternative move is good. Progress shows recent 12 reviewed-game scores and weak concepts; it is not an official rating.
 

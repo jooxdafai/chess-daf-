@@ -83,6 +83,11 @@ p{line-height:1.9}
 .square{aspect-ratio:1;position:relative;display:grid;place-items:center;min-width:0;padding:0;border-radius:0;background:#b9c4b0;-webkit-tap-highlight-color:transparent}
 .square.dark{background:#718a74}
 .square img{width:89%;height:89%;pointer-events:none;filter:drop-shadow(0 2px 1px #0002)}
+#board { touch-action: none; user-select: none; -webkit-user-select: none; }
+.board.dragging, .board.dragging .square { cursor: grabbing; }
+.square.drag-source img { opacity: 0; }
+.square.drag-target { box-shadow: inset 0 0 0 4px #e9edb1; }
+.drag-piece { position: fixed; z-index: 1000; pointer-events: none; object-fit: contain; filter: drop-shadow(0 7px 5px #0008); }
 .square.selected{background:#d1d98c}
 .square.last{background:#c3ce91}
 .square.dark.last{background:#9cab66}
