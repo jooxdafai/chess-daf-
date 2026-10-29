@@ -9,15 +9,29 @@ from pathlib import Path
 import chess
 
 
+class StorageFull(Exception):
+    pass
+
+
 class GameStore:
-    def __init__(self, path, now=time.time):
+    def __init__(self, path, now=time.time, owner='owner', guest_limit=1000):
         self.now = now
+        self.owner = owner
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with sqlite3.connect(self.path) as db:
             db.execute('PRAGMA journal_mode=WAL')
+            db.execute('BEGIN IMMEDIATE')
             db.execute('CREATE TABLE IF NOT EXISTS games (id TEXT PRIMARY KEY, state TEXT NOT NULL)')
             db.execute('CREATE TABLE IF NOT EXISTS reviews (game_id TEXT PRIMARY KEY, data TEXT NOT NULL)')
+            if 'owner' not in [row[1] for row in db.execute('PRAGMA table_info(games)')]:
+                db.execute("ALTER TABLE games ADD COLUMN owner TEXT NOT NULL DEFAULT 'owner'")
+            db.execute('CREATE INDEX IF NOT EXISTS games_owner ON games(owner)')
+            db.execute('CREATE TABLE IF NOT EXISTS guests (id TEXT PRIMARY KEY)')
+            if owner!='owner' and not db.execute('SELECT 1 FROM guests WHERE id=?',(owner,)).fetchone():
+                if db.execute('SELECT count(*) FROM guests').fetchone()[0]>=guest_limit:
+                    raise StorageFull()
+                db.execute('INSERT INTO guests VALUES (?)',(owner,))
 
     @contextmanager
     def connection(self):
@@ -33,13 +47,13 @@ class GameStore:
             db.close()
 
     def read(self, db, game_id):
-        row = db.execute('SELECT state FROM games WHERE id=?', (game_id,)).fetchone()
+        row = db.execute('SELECT state FROM games WHERE id=? AND owner=?', (game_id,self.owner)).fetchone()
         if not row:
             raise KeyError(game_id)
         return json.loads(row[0])
 
     def write(self, db, game):
-        db.execute('INSERT OR REPLACE INTO games VALUES (?,?)', (game['id'], json.dumps(game)))
+        db.execute('INSERT OR REPLACE INTO games (id,state,owner) VALUES (?,?,?)', (game['id'],json.dumps(game),self.owner))
 
     @staticmethod
     def board(game):
@@ -100,7 +114,7 @@ class GameStore:
 
     def list(self):
         with self.connection() as db:
-            rows = db.execute('SELECT state FROM games ORDER BY rowid DESC LIMIT 100').fetchall()
+            rows = db.execute('SELECT state FROM games WHERE owner=? ORDER BY rowid DESC LIMIT 100',(self.owner,)).fetchall()
             result = []
             for row in rows:
                 game=json.loads(row[0])

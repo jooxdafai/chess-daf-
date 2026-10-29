@@ -1,13 +1,17 @@
 import os
+import hashlib
+import re
+import secrets
 import chess
 import chess.pgn
 from datetime import datetime, timezone
 from pathlib import Path
 
-from flask import Flask, Response, abort, jsonify, request, send_from_directory
+from flask import Flask, Response, abort, g, jsonify, request, send_from_directory
 from werkzeug.exceptions import HTTPException
+from werkzeug.local import LocalProxy
 
-from .game import GameStore
+from .game import GameStore, StorageFull
 from .engine import Engine, EngineBusy, EngineUnavailable
 from .coach import explain_move
 from .learning import Learning
@@ -19,20 +23,25 @@ def create_app(config=None):
     app = Flask(__name__, static_folder=str(ROOT/'web/static'), static_url_path='/static')
     app.config.update(DATABASE=os.environ.get('CHESS_DATABASE', str(ROOT/'data/chess.sqlite')),
                       PUBLIC_ORIGIN=os.environ.get('CHESS_ORIGIN', 'https://jooflow.space'),
+                      PUBLIC_ACCESS=os.environ.get('CHESS_PUBLIC')=='1',
+                      GUEST_COOKIE_PATH=os.environ.get('CHESS_COOKIE_PATH','/chess-daf/'),
+                      MAX_GUESTS=1000,
                       MAX_CONTENT_LENGTH=16384)
     app.config.update(config or {})
-    store = GameStore(app.config['DATABASE'])
-    app.extensions['games'] = store
+    legacy_store = GameStore(app.config['DATABASE'])
+    app.extensions['games'] = legacy_store
     engine = app.config.get('ENGINE') or Engine()
     app.extensions['engine'] = engine
-    learning=Learning(store)
-    app.extensions['learning']=learning
+    legacy_learning=Learning(legacy_store)
+    app.extensions['learning']=legacy_learning
+    store=LocalProxy(lambda:g.store)
+    learning=LocalProxy(lambda:g.learning)
 
     @app.before_request
     def guard():
         if request.path == '/health':
             return
-        if request.headers.get('X-Chess-User') != 'owner':
+        if not app.config['PUBLIC_ACCESS'] and request.headers.get('X-Chess-User') != 'owner':
             abort(401)
         if request.method not in ('GET', 'HEAD', 'OPTIONS'):
             if request.headers.get('Origin') != app.config['PUBLIC_ORIGIN']:
@@ -41,9 +50,27 @@ def create_app(config=None):
                 abort(415)
             if not isinstance(request.get_json(), dict):
                 abort(400)
+        if app.config['PUBLIC_ACCESS']:
+            if request.path=='/' or request.path.startswith('/api/'):
+                token=request.cookies.get('chess_daf_guest','')
+                if not re.fullmatch(r'[A-Za-z0-9_-]{43}',token):
+                    token=secrets.token_urlsafe(32)
+                    g.new_guest_cookie=token
+                if request.path.startswith('/api/'):
+                    owner=hashlib.sha256(token.encode()).hexdigest()
+                    g.store=GameStore(app.config['DATABASE'],owner=owner,guest_limit=app.config['MAX_GUESTS'])
+                    g.learning=Learning(g.store)
+        else:
+            g.store=legacy_store
+            g.learning=legacy_learning
 
     @app.after_request
     def headers(response):
+        if getattr(g,'new_guest_cookie',None):
+            response.set_cookie('chess_daf_guest',g.new_guest_cookie,max_age=365*24*60*60,
+                                httponly=True,secure=app.config['PUBLIC_ORIGIN'].startswith('https://'),
+                                samesite='Lax',path=app.config['GUEST_COOKIE_PATH'])
+        response.vary.add('Cookie')
         response.headers.update({
             'Cache-Control':'no-store', 'X-Content-Type-Options':'nosniff',
             'X-Frame-Options':'DENY', 'Referrer-Policy':'no-referrer',
@@ -66,6 +93,10 @@ def create_app(config=None):
     @app.errorhandler(EngineBusy)
     def engine_busy(error):
         return jsonify(error='المحرك مشغول بتحليل تاني؛ جرّب كمان لحظة'), 429
+
+    @app.errorhandler(StorageFull)
+    def storage_full(error):
+        return jsonify(error='الموقع وصل لحد الملفات المحفوظة حاليًا؛ جرّب لاحقًا'), 429
 
     @app.errorhandler(EngineUnavailable)
     def engine_unavailable(error):

@@ -9,6 +9,8 @@ Group=chess-daf
 WorkingDirectory=/opt/chess-daf/current
 Environment=CHESS_DATABASE=/var/lib/chess-daf/chess.sqlite
 Environment=CHESS_ORIGIN=https://jooflow.space
+Environment=CHESS_PUBLIC=1
+Environment=CHESS_COOKIE_PATH=/chess-daf/
 Environment=STOCKFISH_PATH=/usr/games/stockfish
 Environment=PYTHONDONTWRITEBYTECODE=1
 ExecStart=/opt/chess-daf/venv/bin/gunicorn backend.app:create_app() --bind 127.0.0.1:18971 --workers 1 --threads 4 --timeout 120 --access-logfile - --error-logfile -
