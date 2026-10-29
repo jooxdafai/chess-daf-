@@ -27,3 +27,5 @@ Browser verification: install `@playwright/test` in a disposable tooling directo
 **https://jooflow.space/chess-daf/** — opens directly without Joo Flow login or doors. Runtime runs entirely on the server. See [deployment runbook](deploy/README.md) and [executed verification](docs/deployment-evidence.md). Feature PRs form an open stack (merge in dependency order); each includes a scoped Marja review. No PR has been merged by the build task.
 
 Passwordless browser verification: start the fixture with `CHESS_PUBLIC=1`, run `tests/public-browser.mjs` for two-browser isolation and `CHESS_PUBLIC_TEST=1 ... node tests/browser.mjs` for the complete play/review/training path, using the same Playwright tooling variable.
+
+Viewport regression: with the public isolated fixture running, use the same `CHESS_PLAYWRIGHT_MODULE` tooling variable with `node tests/layout.mjs`. It checks board/clocks/action geometry at laptop, wide/short desktop, mobile and tablet sizes, including notices, review navigation, scrollable panels and all promotion choices. Desktop play is height-bound; history/training pages and mobile settings retain normal page scrolling.
