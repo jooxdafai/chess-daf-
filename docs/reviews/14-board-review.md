@@ -1,0 +1,20 @@
+# Marja — verified on-board review playback, 2026-10-30
+
+Direct review of the final diff against `e382e80` (PR #13): backend frame generation and cached-review upgrade, the new player/SVG/caption module, app lifecycle and review callers, HTML/CSS, tests, README and CI. Re-read the actual shared Origin/session guard, review route, owner-filtered store and write guards. No delegation. No confirmed feature-related vulnerabilities or unresolved candidates within this scope.
+
+## Traced boundaries
+
+- `visual_frame` requires python-chess legal membership and produces before/after FEN/SAN from the actual board. `add_visual_review` replays stored legal game moves and a maximum-five legal SAN prefix, checking the first alternative against the stored best move. Invalid alternatives/prefixes are stopped; scores and existing summary fields are preserved. No user-selected executable or network model is involved.
+- `/review` still requires a finished, owned game. Exact Origin and JSON checks run before the cookie-derived owner store. Both cached read and `save_review` verify game ownership; SQL remains parameter-bound. Upgrades are limited to previously generated cache JSON and preserve the schema. The request body cannot supply frames or override another owner's cache. No new endpoint, dependency, cookie or privilege path was introduced.
+- Work remains bounded by the pre-existing 600-ply game cap and five-frame continuation cap. Frames contain chess state already owned by the same browser, not credentials or another tenant's records. Repeated cached requests do not start another engine job. Existing rate/engine resource limits remain in effect.
+- Frontend playback consumes server FEN snapshots and does not update confirmed game state, clocks or call `/move`. UCI arrows are format-checked and become numeric SVG paths; marker URLs and colors are fixed local constants. Captions, SAN, titles and accessibility text use DOM text/attribute APIs, with no HTML-string or interpreter sink. Callout geometry is measured and numeric.
+- One bounded timer drives at most the selected line; pause, mode/move changes, flip, tab/focus loss and new-game cleanup stop it. New games clear the model/overlays before drawing. A single resize observer only repositions the current caption/arrows. Reduced-motion preferences disable automatic arrow/text animation. Review remains a finished-game display; normal server turn/ply/clock/legality guards are unchanged.
+- CI adds syntax/unit checks under the existing read-only token and pinned actions. Browser fixture routes remain in the standalone loopback fixture, not production.
+
+## Executed verification
+
+Backend visual-frame regression and on-board-arrow regression failed before implementation and passed afterwards. Local Python **37 passed, 1 native-only skipped**; Node **8 passed**. Tests cover old-cache enrichment without a second engine call or score changes, legal-prefix truncation, invalid alternatives, castling/en-passant/underpromotion, frame/arrow orientation, timer pause/restart/step, exact displayed pieces, LTR counters, read-only playback, new-game cleanup and reduced motion. Full local drag, premove, multi-queue, smooth, gameplay/review/training/persistence, viewport and two-browser isolation suites passed. After a compact-caption fix, dedicated review and viewport suites passed again, including 960x540, 390x844 and 360x640. Screenshots inspected. JS syntax/diff checks passed; host/native and deployment evidence are recorded separately.
+
+## Limits
+
+Scoped review, not whole-project security/dependency-advisory clearance. Captions may be shortened on crowded/compact boards; full text remains available in the coach panel. Legal engine continuations are suggestions at the stored analysis depth, not guaranteed outcomes. Touch/device coverage is Chrome-based rather than physical iOS/Android certification. The earlier intermittent native-engine503 behavior was not changed by this feature. Cache upgrades add JSON fields only; rollback can restore the prior app without restoring over newer games.

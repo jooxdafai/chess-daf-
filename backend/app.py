@@ -13,7 +13,7 @@ from werkzeug.local import LocalProxy
 
 from .game import GameStore, StorageFull
 from .engine import Engine, EngineBusy, EngineUnavailable
-from .coach import explain_move
+from .coach import explain_move, add_visual_review
 from .learning import Learning
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -162,6 +162,9 @@ def create_app(config=None):
             raise ValueError('المراجعة الكاملة بعد الماتش؛ التلميحات متاحة في وضع التدريب')
         cached=store.review(game_id)
         if cached is not None:
+            if cached.get('visual_version')!=1:
+                cached=add_visual_review(game,cached)
+                store.save_review(game_id,cached)
             learning.from_review(game_id,cached)
             return jsonify(cached)
         result=engine.review(game)
