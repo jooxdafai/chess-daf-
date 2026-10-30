@@ -38,6 +38,13 @@ With the isolated premove fixture running, use the same Playwright tooling varia
 ## Personal training
 Three starter puzzles plus up to five exercises from your biggest inaccuracies per reviewed game. Your attempts, solved status and use of hints survive reload/restart. Personal exercises ask for the stored engine recommendation, not a claim that no alternative move is good. Progress shows recent 12 reviewed-game scores and weak concepts; it is not an official rating.
 
+## On-board review player
+Finished-game reviews show an amber played-move arrow and green engine alternative, square highlights and an animated Arabic caption on the board. Equal choices use one green arrow. Choose **قارن / اللي اتلعب / البديل**, then play/pause, restart or step through the selected explanation. Previous/next navigate the game's moves; both counters stay LTR inside the Arabic UI. Captions prefer empty, unhighlighted space and use a compact layout on short boards; full explanations remain in the coach panel. Playback pauses on navigation, mode/board-orientation changes, leaving the tab/focus or starting another game; automatic arrow/text animation respects reduced motion.
+
+The backend supplies a legal played frame and up to five legal continuation frames, including SAN/UCI, before/after FEN and a move-specific explanation. Replay changes presentation only, without `/move` calls, saved-game or clock changes. Older cached text reviews gain `visual_version: 1` frames from their legal SAN prefix on the owned review request, preserving scores without another engine job or SQL schema migration. Unavailable/invalid alternatives are not animated. Quick engine variations remain approximate choices, not forced outcomes.
+
+Use `node --test tests/review-view-unit.mjs`; with the existing public isolated fixture and Playwright tooling variable, run `node tests/board-review.mjs`. The same browser suite supports `CHESS_TEST_URL=https://jooflow.space/chess-daf/` for native-engine verification. Python review tests cover cache upgrades, legal-prefix truncation, castling, en passant and underpromotion. Chrome geometry/reduced-motion coverage is not a physical-device or all-browser certification.
+
 Browser verification: install `@playwright/test` in a disposable tooling directory. Run `.venv/bin/python tests/ui_server.py /tmp/unique-chess-test.sqlite`, then `CHESS_PLAYWRIGHT_MODULE=/absolute/path/to/@playwright/test/index.mjs node tests/browser.mjs` (Google Chrome installed). This uses a scripted test engine and separate SQLite database; production never imports it. Use a fresh disposable DB each run. The Python suite includes a separate native Stockfish integration test.
 
 ## Live installation

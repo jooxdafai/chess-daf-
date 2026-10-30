@@ -1,6 +1,7 @@
 import {candidatePremoves,resolvePremove,appendPremove,projectQueue,MAX_PREMOVES} from './premove.mjs';
 import {attachBoardDrag} from './drag.mjs';
 import {createBoardView,projectMove} from './board-view.mjs';
+import {createReviewPlayer} from './review-view.mjs';
 const $ = (selector) => document.querySelector(selector);
 let game = null, selected = null, flipped = false, busy = false, pendingPromotion = null;
 let premoves = [], botPending = false, pendingPromotionPremove = false;
@@ -9,6 +10,7 @@ const boardView=createBoardView($('#board'),sq=>onSquare(sq));
 let seconds = 0;
 let receivedAt = performance.now(), timeoutSync = false;
 let review = null, reviewCursor = -1, showBest = false, reviewBusy = false;
+let reviewPlayer=null,reviewFrame=null;
 const reviewAttempted = new Set();
 const pieceNames = {p:'بيدق',n:'حصان',b:'فيل',r:'رخ',q:'وزير',k:'ملك'};
 const initialCoach=$('#coach-content').cloneNode(true);
@@ -27,11 +29,11 @@ function position(fen) {
   const map = {}; fen.split(' ')[0].split('/').forEach((row,r) => { let file=0; for (const piece of row) { if (/\d/.test(piece)) file+=Number(piece); else map[`${'abcdefgh'[file++]}${8-r}`]=piece; } }); return map;
 }
 function drawBoard(fen,animate=true) {
-  fen=fen || (review&&reviewCursor>=0 ? review.moves[reviewCursor]?.[showBest?'best_fen':'fen_before']:null) || game?.fen || startFen;
+  fen=fen || (review&&reviewCursor>=0 ? reviewFrame?.fen||review.moves[reviewCursor]?.fen_before:null) || game?.fen || startFen;
   const pieces=projectQueue(pendingVisual?.pieces||position(fen),premoves);
-  const squares=boardView.render(pieces,{flipped,animate,move:pendingVisual?.uci||game?.moves.at(-1)?.uci||''});
+  const squares=boardView.render(pieces,{flipped,animate,move:pendingVisual?.uci||(review&&reviewCursor>=0?reviewFrame?.uci:game?.moves.at(-1)?.uci)||''});
   const files=[...'abcdefgh'], ranks=[8,7,6,5,4,3,2,1]; if(flipped){files.reverse();ranks.reverse();}
-  const last=review&&reviewCursor>=0 ? review.moves[reviewCursor]?.[showBest?'best_uci':'uci']||'' : game?.moves.at(-1)?.uci || '';
+  const last=review&&reviewCursor>=0 ? reviewFrame?.uci||'' : game?.moves.at(-1)?.uci || '';
   const future=selected&&botPending?candidatePremoves(pieces,game.settings.color,selected):null;
   for(const rank of ranks) for(const file of files){
     const sq=file+rank, piece=pieces[sq], b=squares.get(sq);
@@ -45,6 +47,8 @@ function drawBoard(fen,animate=true) {
     const numbers=premoves.flatMap((p,i)=>p.uci.slice(2,4)===sq?[i+1]:[]);let badge=b.querySelector('.queue-order');
     if(numbers.length){if(!badge){badge=document.createElement('span');badge.className='queue-order';b.append(badge);}badge.textContent=numbers.join('·');}else badge?.remove();
     if(selected&&(future||game?.legal_moves||[]).some(m=>m.startsWith(selected+sq))){b.classList.add('legal');if(piece)b.classList.add('capture');}
+    b.classList.toggle('review-source',!!reviewFrame?.arrows.some(a=>a.uci.slice(0,2)===sq));
+    b.classList.toggle('review-target',!!reviewFrame?.arrows.some(a=>a.uci.slice(2,4)===sq));
     if(reviewCursor<0&&game?.check&&piece?.toLowerCase()==='k'&&(piece===piece.toUpperCase())===(game.turn==='white'))b.classList.add('in-check');
 
   }
@@ -59,7 +63,7 @@ function render(){
   $('#opponent-status').textContent=game?.settings.mode==='match'?'ماتش من غير مساعدة':'وضع التدريب';
   controls(); clocks();
 }
-function accept(next){boardDrag?.cancel();pendingVisual=null;if(next.id!==game?.id){review=null;reviewCursor=-1;showBest=false;premoves=[];selected=null;pendingPromotionPremove=false;$('#review-nav').hidden=true;$('#coach-content').replaceChildren(...Array.from(initialCoach.childNodes).map(n=>n.cloneNode(true)));$('#promotion').hidden=true;pendingPromotion=null;}if(next.result){premoves=[];selected=null;pendingPromotion=null;pendingPromotionPremove=false;$('#promotion').hidden=true;}game=next;receivedAt=performance.now();timeoutSync=false;localStorage.setItem('chess-daf-game',game.id);render();}
+function accept(next){boardDrag?.cancel();pendingVisual=null;if(next.id!==game?.id){reviewPlayer?.clear();reviewFrame=null;review=null;reviewCursor=-1;showBest=false;premoves=[];selected=null;pendingPromotionPremove=false;$('#review-nav').hidden=true;$('#coach-content').replaceChildren(...Array.from(initialCoach.childNodes).map(n=>n.cloneNode(true)));$('#promotion').hidden=true;pendingPromotion=null;}if(next.result){premoves=[];selected=null;pendingPromotion=null;pendingPromotionPremove=false;$('#promotion').hidden=true;}game=next;receivedAt=performance.now();timeoutSync=false;localStorage.setItem('chess-daf-game',game.id);render();}
 function canInteract(){return !!game&&!game.result&&(botPending||(!busy&&game.turn===game.settings.color));}
 function controls(){
   document.querySelectorAll('#board .square').forEach(b=>b.disabled=!canInteract());
@@ -136,7 +140,7 @@ async function newGame(){cancelPremove();setBusy(true);try{selected=null;flipped
 async function sync(){if(busy||!game)return;cancelPremove();setBusy(true);try{accept(await api(`games/${game.id}`));notify('');await botTurn();}catch(e){notify(e.message,true);}finally{setBusy(false);}}
 $('#new-game').addEventListener('click',()=>{if(game&&!game.result)$('#confirm-dialog').showModal();else newGame();});
 $('#confirm-new').addEventListener('click',()=>{$('#confirm-dialog').close();newGame();});$('#cancel-new').addEventListener('click',()=>$('#confirm-dialog').close());
-$('#flip').addEventListener('click',()=>{boardDrag?.cancel();flipped=!flipped;drawBoard();});
+$('#flip').addEventListener('click',()=>{boardDrag?.cancel();flipped=!flipped;drawBoard();reviewPlayer?.refresh();});
 $('#sync').addEventListener('click',sync);
 $('#hint').addEventListener('click',async()=>{setBusy(true);try{const hint=await api(`games/${game.id}/hint`,{});selected=hint.uci.slice(0,2);drawBoard();const box=$('#coach-content');box.replaceChildren();const note=node('div','','coach-note');note.append(node('h3',`جرّب ${hint.san}`),node('p',hint.explanation));box.append(note);notify(`من ${hint.uci.slice(0,2)} إلى ${hint.uci.slice(2,4)} · تحليل سريع تقديري.`);}catch(e){notify(e.message,true);}finally{setBusy(false);}});
 $('#resign').addEventListener('click',async()=>{if(!confirm('تنهي الماتش بالاستسلام؟'))return;setBusy(true);try{accept(await api(`games/${game.id}/resign`,{}));notify('الماتش اتحفظ. نراجع ونتعلّم منه.');}catch(e){notify(e.message,true);}finally{setBusy(false);}});
@@ -146,9 +150,13 @@ $('#undo-premove').addEventListener('click',()=>{boardDrag?.cancel();premoves=pr
 $('#board').addEventListener('contextmenu',e=>{e.preventDefault();cancelPremove();});
 document.addEventListener('keydown',e=>{if(e.key==='Escape')cancelPremove();});
 document.querySelectorAll('[data-time]').forEach(b=>b.addEventListener('click',()=>{seconds=Number(b.dataset.time);document.querySelectorAll('[data-time]').forEach(n=>n.classList.toggle('selected',n===b));}));
-function switchTab(tab){document.querySelectorAll('.nav').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));for(const key of ['play','history','practice'])$(`#${key}-view`).hidden=key!==tab;}
+function switchTab(tab){if(tab!=='play')reviewPlayer?.pause();document.querySelectorAll('.nav').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));for(const key of ['play','history','practice'])$(`#${key}-view`).hidden=key!==tab;}
 document.querySelectorAll('[data-tab]').forEach(b=>b.addEventListener('click',async()=>{switchTab(b.dataset.tab);if(b.dataset.tab==='history')await history();if(b.dataset.tab==='practice')await practice();}));
 async function history(){try{const games=await api('games');const list=$('#history-list');list.replaceChildren();if(!games.length)list.textContent='لسه مفيش ماتشات. أول ماتش هو البداية.';for(const g of games){const row=document.createElement('div');row.className='history-item';const info=document.createElement('div');info.textContent=g.result?`النتيجة ${g.result}`:'ماتش محفوظ';const date=document.createElement('small');date.textContent=`${new Date(g.created_at*1000).toLocaleString('ar-EG')} · ${g.ply} نقلة`;info.append(date);const open=document.createElement('button');open.className='secondary';open.textContent='افتح الماتش ↗';open.addEventListener('click',async()=>{selected=null;flipped=g.settings.color==='black';accept(g);switchTab('play');await sync();});row.append(info,open);list.append(row);}}catch(e){notify(e.message,true);}}
+reviewPlayer=createReviewPlayer({svg:$('#review-arrows'),callout:$('#review-callout'),flipped:()=>flipped,
+  controls:{mode:$('#review-mode'),play:$('#review-play'),replay:$('#review-replay'),back:$('#review-backstep'),next:$('#review-step'),progress:$('#review-step-label')},
+  onFrame:frame=>{reviewFrame=frame;showBest=frame.mode==='best';drawBoard();reviewDetails();}
+});
 boardDrag=attachBoardDrag($('#board'),{
   canStart:from=>{
     if(!canInteract()||!$('#promotion').hidden)return false;
@@ -170,17 +178,17 @@ async function beginReview(){
   catch(e){notify(`${e.message} · تقدر تعيد المراجعة بالزر.`,true);}finally{reviewBusy=false;controls();}
 }
 function selectReview(index){
-  if(!review?.moves[index])return;reviewCursor=index;showBest=false;selected=null;drawBoard();reviewDetails();
+  if(!review?.moves[index])return;reviewCursor=index;showBest=false;selected=null;notify('');$('#review-nav').hidden=false;reviewPlayer.load({...review.moves[index],actor:review.moves[index].side===game.settings.color?'نقلتك':'نقلة الخصم'});
 }
 function reviewDetails(){
   const move=review.moves[reviewCursor], box=$('#coach-content');box.replaceChildren();
   const note=node('div','','coach-note');
   note.append(node('span',`مراجعة الماتش · مؤشر أداء تقريبي ${review.accuracy??'—'}/100`,'review-eyebrow'),node('h3',`${move.san} · ${move.label}`,`quality-text ${move.quality}`),node('p',`${move.side===game.settings.color?'نقلتك':'نقلة الخصم'} · الأفضل حسب التحليل: ${move.best_san}`),node('p',move.explanation));
   if(move.line.length)note.append(node('p',move.line.join(' → '),'variation'));
-  const toggle=node('button',showBest?'ارجع للموقف قبل النقلة':'ورّيني النقلة المقترحة','secondary');toggle.id='show-best';toggle.addEventListener('click',()=>{showBest=!showBest;drawBoard();reviewDetails();});note.append(toggle);
+  const toggle=node('button',showBest?'ارجع للموقف قبل النقلة':'ورّيني النقلة المقترحة','secondary');toggle.id='show-best';toggle.addEventListener('click',()=>reviewPlayer.setMode(showBest?'compare':'best'));note.append(toggle);
   note.append(node('small',`الفرق عن أفضل اختيار: ${(move.loss/100).toFixed(2)} بيدق · عمق ${move.depth}. التكملة تقديرية وليست إجبارية.`,'review-disclaimer'));
   box.append(note);$('#review-nav').hidden=false;$('#review-position').textContent=`${reviewCursor+1} / ${review.moves.length}`;$('#review-prev').disabled=reviewCursor===0;$('#review-next').disabled=reviewCursor===review.moves.length-1;
-  notify('المراجعة جاهزة. اضغط على أي نقلة، أو اتحرك بالأسهم علشان تفهم الماتش.');
+  $('#position-label').textContent=`مراجعة · ${reviewCursor+1}`;
 }
 $('#review-game').addEventListener('click',beginReview);
 $('#review-prev').addEventListener('click',()=>selectReview(reviewCursor-1));$('#review-next').addEventListener('click',()=>selectReview(reviewCursor+1));

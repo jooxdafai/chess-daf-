@@ -1,6 +1,6 @@
 import chess
 import pytest
-from backend.coach import build_review, explain_move, classify
+from backend.coach import build_review, explain_move, classify, add_visual_review
 from backend.app import create_app
 from tests.test_foundation import HEADERS
 from tests.test_engine_clock import LegalEngine
@@ -36,6 +36,22 @@ def test_explanations_are_grounded_in_position():
     assert concept=='checkmate'
 
 
+def test_review_has_verified_played_and_best_animation_frames():
+    game={'start_fen':chess.STARTING_FEN,'settings':{'color':'white'},'moves':[{'uci':'e2e4','san':'e4'}]}
+    positions=[{'cp':0,'uci':'d2d4','depth':8,'pv':['d2d4','d7d5','d2d3']},{'cp':0,'uci':'e7e5','depth':8,'pv':[]}]
+    review=build_review(game,positions)
+    assert review['visual_version']==1
+    move=review['moves'][0]
+    assert move['played_frame']['uci']=='e2e4'
+    assert 'e4' in move['played_frame']['explanation']
+    assert [f['uci'] for f in move['best_frames']]==['d2d4','d7d5']
+    board=chess.Board()
+    for frame in move['best_frames']:
+        assert frame['fen_before']==board.fen()
+        assert chess.Move.from_uci(frame['uci']) in board.legal_moves
+        board.push_uci(frame['uci']);assert frame['fen']==board.fen()
+
+
 class ReviewEngine(LegalEngine):
     calls=0
     def review(self,game):
@@ -60,3 +76,40 @@ def test_reviews_require_finished_game_and_are_cached(tmp_path):
     client.post(url+'/review',json={},headers=HEADERS)
     assert engine.calls==1
     assert client.get(url+'/pgn',headers=HEADERS).data.startswith(b'[Event "Chess DAF"]')
+
+
+def test_old_cached_reviews_gain_visual_frames_without_another_engine_job(tmp_path):
+    engine=ReviewEngine();app=create_app({'TESTING':True,'DATABASE':str(tmp_path/'old.sqlite'),'ENGINE':engine})
+    client=app.test_client();game=client.post('/api/games',json={},headers=HEADERS).json
+    url=f"/api/games/{game['id']}"
+    client.post(url+'/move',json={'uci':'e2e4','ply':0},headers=HEADERS);client.post(url+'/resign',json={},headers=HEADERS)
+    review=client.post(url+'/review',json={},headers=HEADERS).json
+    review.pop('visual_version')
+    for move in review['moves']:
+        move.pop('played_frame');move.pop('best_frames')
+    app.extensions['games'].save_review(game['id'],review)
+    upgraded=client.post(url+'/review',json={},headers=HEADERS).json
+    assert upgraded['visual_version']==1 and upgraded['moves'][0]['played_frame']['san']=='e4'
+    assert upgraded['accuracy']==review['accuracy'] and engine.calls==1
+
+
+@pytest.mark.parametrize('fen,uci,squares',[
+    ('r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1','e1g1',{'g1':'K','f1':'R','h1':None}),
+    ('7k/P7/8/8/8/8/8/7K w - - 0 1','a7a8n',{'a8':'N','a7':None}),
+    ('7k/8/8/3pP3/8/8/8/7K w - d6 0 1','e5d6',{'d6':'P','d5':None}),
+])
+def test_visual_frames_follow_special_move_rules(fen,uci,squares):
+    board=chess.Board(fen);game={'start_fen':fen,'moves':[{'uci':uci,'san':board.san(chess.Move.from_uci(uci))}]}
+    record={'best_uci':uci,'line':[]};review=add_visual_review(game,{'moves':[record]})
+    for frame in [review['moves'][0]['played_frame'],*review['moves'][0]['best_frames']]:
+        after=chess.Board(frame['fen'])
+        for square,piece in squares.items():
+            actual=after.piece_at(chess.parse_square(square));assert (actual.symbol() if actual else None)==piece
+
+
+def test_cached_invalid_continuation_is_not_animated():
+    game={'start_fen':chess.STARTING_FEN,'moves':[{'uci':'e2e4','san':'e4'}]}
+    review=add_visual_review(game,{'moves':[{'best_uci':'d2d4','line':['d4','not a move']}]})
+    assert [f['uci'] for f in review['moves'][0]['best_frames']]==['d2d4']
+    review=add_visual_review(game,{'moves':[{'best_uci':'invalid','line':[]}]})
+    assert review['moves'][0]['best_frames']==[]
