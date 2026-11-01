@@ -79,6 +79,7 @@ def test_real_stockfish_returns_legal_move_and_analysis():
     engine=Engine()
     board=chess.Board()
     assert chess.Move.from_uci(engine.play(board,1)) in board.legal_moves
+    assert chess.Move.from_uci(engine.play(board,3)) in board.legal_moves
     answer=engine.best(board)
     assert chess.Move.from_uci(answer['uci']) in board.legal_moves
     assert isinstance(answer['cp'],int)

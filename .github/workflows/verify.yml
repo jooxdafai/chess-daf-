@@ -20,6 +20,8 @@ jobs:
       - run: node --check web/static/drag.mjs
       - run: node --check web/static/board-view.mjs
       - run: node --check web/static/review-view.mjs
+      - run: node --check web/static/training-view.mjs
+      - run: node --test tests/training-view-unit.mjs
       - run: node --test tests/review-view-unit.mjs
       - run: node --test tests/board-view-unit.mjs
       - run: node --test tests/premove-unit.mjs

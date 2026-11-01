@@ -1,4 +1,4 @@
-"""One bounded native Stockfish job at a time, never a user-selected executable."""
+"""One bounded opponent/analysis job at a time, never a user-selected executable."""
 import os
 import threading
 from contextlib import contextmanager
@@ -6,6 +6,7 @@ from pathlib import Path
 
 import chess.engine
 from .coach import build_review
+from .training import choose_training_move
 
 
 class EngineBusy(Exception):
@@ -22,21 +23,30 @@ class Engine:
         self.lock=threading.Lock()
 
     @contextmanager
-    def session(self):
+    def slot(self):
         if not Path(self.path).is_file():
             raise EngineUnavailable()
         if not self.lock.acquire(blocking=False):
             raise EngineBusy()
         try:
-            with chess.engine.SimpleEngine.popen_uci([self.path], timeout=5) as engine:
-                engine.configure({'Threads':1,'Hash':16})
-                yield engine
-        except (chess.engine.EngineError, TimeoutError, OSError):
-            raise EngineUnavailable() from None
+            yield
         finally:
             self.lock.release()
 
+    @contextmanager
+    def session(self):
+        with self.slot():
+            try:
+                with chess.engine.SimpleEngine.popen_uci([self.path], timeout=5) as engine:
+                    engine.configure({'Threads':1,'Hash':16})
+                    yield engine
+            except (chess.engine.EngineError, TimeoutError, OSError):
+                raise EngineUnavailable() from None
+
     def play(self, board, level):
+        if level<=2:
+            with self.slot():
+                return choose_training_move(board,level).uci()
         with self.session() as engine:
             engine.configure({'Skill Level':[0,3,8,14,20][level-1]})
             result=engine.play(board,chess.engine.Limit(time=.12 if level<4 else .3))
