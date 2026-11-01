@@ -15,6 +15,7 @@ from .game import GameStore, StorageFull
 from .engine import Engine, EngineBusy, EngineUnavailable
 from .coach import explain_move, add_visual_review
 from .learning import Learning
+from .catalog import Library
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -171,6 +172,20 @@ def create_app(config=None):
         store.save_review(game_id,result)
         learning.from_review(game_id,result)
         return jsonify(result)
+
+    @app.get('/api/library')
+    def library_list():
+        try:level=int(request.args.get('level','1'));page=int(request.args.get('page','0'))
+        except ValueError:raise ValueError('المستوى أو الصفحة غير صالح') from None
+        return jsonify(Library(store).list(level,page))
+
+    @app.post('/api/library/<puzzle_id>/<action>')
+    def library_action(puzzle_id,action):
+        lib=Library(store)
+        if action=='hint':return jsonify(lib.hint(puzzle_id))
+        if action=='attempt':return jsonify(lib.attempt(puzzle_id,request.json.get('uci'),request.json.get('ply')))
+        if action=='solution':return jsonify(lib.solution(puzzle_id))
+        abort(404)
 
     @app.get('/api/practice')
     def practice():
