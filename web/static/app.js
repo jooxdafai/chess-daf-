@@ -2,6 +2,7 @@ import {candidatePremoves,resolvePremove,appendPremove,projectQueue,MAX_PREMOVES
 import {attachBoardDrag} from './drag.mjs';
 import {createBoardView,projectMove} from './board-view.mjs';
 import {createReviewPlayer} from './review-view.mjs';
+import {opponentName,difficultyHelp,trainingDelay} from './training-view.mjs';
 const $ = (selector) => document.querySelector(selector);
 let game = null, selected = null, flipped = false, busy = false, pendingPromotion = null;
 let premoves = [], botPending = false, pendingPromotionPremove = false;
@@ -59,7 +60,7 @@ function render(){
   if(!game?.moves.length){const p=document.createElement('p');p.className='empty-hint';p.textContent='أول نقلة مستنيّاك ♙';list.append(p);}list.scrollTop=list.scrollHeight;
   $('#game-status').textContent=game?.result ? `انتهت · ${game.result}`:game ? `${game.turn==='white'?'دور الأبيض':'دور الأسود'}${game.check?' · كش!':''}`:'اختار إعداداتك وابدأ';
   $('#position-label').textContent=game ? `النقلة ${Math.floor(game.ply/2)+1}`:'بداية جديدة، فرصة جديدة';
-  $('#opponent-name').textContent=game ? `Stockfish · مستوى ${game.settings.level}`:'Stockfish';
+  $('#opponent-name').textContent=opponentName(game);
   $('#opponent-status').textContent=game?.settings.mode==='match'?'ماتش من غير مساعدة':'وضع التدريب';
   controls(); clocks();
 }
@@ -117,8 +118,10 @@ function submitPremove(uci){
 }
 async function botTurn(){
   while(game&&!game.result&&game.turn!==game.settings.color){
-    botPending=true;controls();$('#opponent-status').textContent='بيفكّر… اختار نقلة مسبقة لو حابب';
+    botPending=true;controls();$('#opponent-status').textContent=game.settings.level<=2?'دور خصم التدريب… حضّر نقلة مسبقة لو حابب':'بيفكّر… اختار نقلة مسبقة لو حابب';
     try{
+      const delay=trainingDelay(game,(performance.now()-receivedAt)/1000);
+      if(delay)await new Promise(resolve=>setTimeout(resolve,delay*1000));
       const next=await api(`games/${game.id}/bot`,{});
       botPending=false;accept(next);
       const queued=premoves[0];
@@ -150,6 +153,8 @@ $('#undo-premove').addEventListener('click',()=>{boardDrag?.cancel();premoves=pr
 $('#board').addEventListener('contextmenu',e=>{e.preventDefault();cancelPremove();});
 document.addEventListener('keydown',e=>{if(e.key==='Escape')cancelPremove();});
 document.querySelectorAll('[data-time]').forEach(b=>b.addEventListener('click',()=>{seconds=Number(b.dataset.time);document.querySelectorAll('[data-time]').forEach(n=>n.classList.toggle('selected',n===b));}));
+$('#level').addEventListener('change',()=>{$('#level-help').textContent=difficultyHelp(Number($('#level').value));});
+$('#level-help').textContent=difficultyHelp(Number($('#level').value));
 function switchTab(tab){if(tab!=='play')reviewPlayer?.pause();document.querySelectorAll('.nav').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));for(const key of ['play','history','practice'])$(`#${key}-view`).hidden=key!==tab;}
 document.querySelectorAll('[data-tab]').forEach(b=>b.addEventListener('click',async()=>{switchTab(b.dataset.tab);if(b.dataset.tab==='history')await history();if(b.dataset.tab==='practice')await practice();}));
 async function history(){try{const games=await api('games');const list=$('#history-list');list.replaceChildren();if(!games.length)list.textContent='لسه مفيش ماتشات. أول ماتش هو البداية.';for(const g of games){const row=document.createElement('div');row.className='history-item';const info=document.createElement('div');info.textContent=g.result?`النتيجة ${g.result}`:'ماتش محفوظ';const date=document.createElement('small');date.textContent=`${new Date(g.created_at*1000).toLocaleString('ar-EG')} · ${g.ply} نقلة`;info.append(date);const open=document.createElement('button');open.className='secondary';open.textContent='افتح الماتش ↗';open.addEventListener('click',async()=>{selected=null;flipped=g.settings.color==='black';accept(g);switchTab('play');await sync();});row.append(info,open);list.append(row);}}catch(e){notify(e.message,true);}}
