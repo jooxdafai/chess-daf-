@@ -2,6 +2,7 @@ import {candidatePremoves,resolvePremove,appendPremove,projectQueue,MAX_PREMOVES
 import {attachBoardDrag} from './drag.mjs';
 import {createBoardView,projectMove} from './board-view.mjs';
 import {createReviewPlayer} from './review-view.mjs';
+import {mountLibrary} from './library.mjs';
 import {opponentName,difficultyHelp,trainingDelay} from './training-view.mjs';
 const $ = (selector) => document.querySelector(selector);
 let game = null, selected = null, flipped = false, busy = false, pendingPromotion = null;
@@ -205,6 +206,7 @@ async function practice(){
     const counters=node('div','','stats-grid');
     for(const [label,value,id] of [['ماتشات لعبتها',stats.games,'games-count'],['تمارين اتحلّت',stats.solved,'solved-count'],['حل بتلميح',stats.assisted,'assisted-count'],['متوسط آخر المراجعات',stats.average===null?'—':`${stats.average}/100`,'average-score']]){const card=node('div','','stat');const strong=node('strong',value);strong.id=id;card.append(strong,node('small',label));counters.append(card);}box.append(counters);
     const chart=node('div','','progress-chart');chart.append(node('h3','خطواتك في آخر 12 مراجعة'),node('p','مؤشر تقريبي لفهم النقلات، مش تصنيف شطرنج. كل نقطة ماتش اتراجع.'));if(stats.scores.length)chart.append(scoreChart(stats.scores));else chart.append(node('p','راجع أول ماتش علشان تبدأ تشوف تطوّرك هنا.'));if(stats.focus.length)chart.append(node('p',`خلّي تركيزك الجاي على: ${stats.focus.join('، ')}.`));box.append(chart);
+    mountLibrary(box,api);
     const layout=node('div','','practice-layout'),choices=node('div','','puzzle-choices');
     choices.append(node('h3','تمرين صغير كل مرة'));
     for(const item of items){const button=node('button',`${item.solved?'✓ ':''}${item.source==='starter'?'تدريب بداية':'من غلطاتك'} · ${item.side==='white'?'الأبيض':'الأسود'}`,'puzzle-choice');button.dataset.puzzle=item.id;button.addEventListener('click',()=>openPuzzle(item));choices.append(button);}

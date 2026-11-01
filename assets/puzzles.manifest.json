@@ -1,0 +1,14 @@
+{
+  "source": "https://database.lichess.org/lichess_db_puzzle.csv.zst",
+  "license": "CC0-1.0",
+  "count": 10000,
+  "levels": {
+    "4": 2000,
+    "3": 2000,
+    "2": 2000,
+    "5": 2000,
+    "1": 2000
+  },
+  "sha256": "fc5162a966d278ca10cb7786e4fbe42879cf6e93d1df29cf0745860e7e50a3d6",
+  "selection": "First unique legal positions in stream; popularity>=80, plays>=100, max15 solution plies. Rating bands <1000/1400/1800/2200/else. Frozen snapshot, not a representative random sample."
+}
