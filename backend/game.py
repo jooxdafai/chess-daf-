@@ -86,7 +86,7 @@ class GameStore:
             game.update(result=result, reason='timeout')
 
     def create(self, fen=chess.STARTING_FEN, **settings):
-        settings = {'mode':'local', 'color':'white', 'seconds':0, 'level':3, **settings}
+        settings = {'mode':'local', 'color':'white', 'seconds':0, 'level':1, **settings}
         if (settings['mode'] not in ('local','training','match') or settings['color'] not in ('white','black')
                 or type(settings['seconds']) is not int or settings['seconds'] not in (0,60,180,600)
                 or type(settings['level']) is not int or settings['level'] not in range(1,6)):

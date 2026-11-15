@@ -434,3 +434,5 @@ footer span:nth-child(2){display:none}
  .review-callout strong { font-size: 10px; }
 }
 @media (prefers-reduced-motion: reduce) { .review-arrow > path { animation: none; } }
+
+.level-help { display: block; color: var(--muted); font-size: 11px; line-height: 1.65; margin: -6px 0 14px; }

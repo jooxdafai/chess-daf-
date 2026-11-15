@@ -192,8 +192,9 @@ def create_app(config=None):
     def pgn(game_id):
         game=store.get(str(game_id))
         exported=chess.pgn.Game.from_board(store.board(game))
-        exported.headers.update(Event='Chess DAF', White='Joo' if game['settings']['color']=='white' else 'Stockfish',
-                                Black='Joo' if game['settings']['color']=='black' else 'Stockfish',
+        opponent='Practice opponent' if game['settings']['level']<=2 else 'Stockfish'
+        exported.headers.update(Event='Chess DAF', White='Joo' if game['settings']['color']=='white' else opponent,
+                                Black='Joo' if game['settings']['color']=='black' else opponent,
                                 Date=datetime.fromtimestamp(game['created_at'],timezone.utc).strftime('%Y.%m.%d'),
                                 Result=game['result'] or '*')
         return Response(str(exported)+'\n',mimetype='application/x-chess-pgn',
